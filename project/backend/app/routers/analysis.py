@@ -35,14 +35,12 @@ async def analyze_job(request: JobAnalysisRequest, user_id: UUID):
     3. Suggestion Generation
     """
     try:
-        
-        
         # Get job details from database
         db_manager = DatabaseManager.get_instance()
         supabase = db_manager.get_connection()
         
         job_response = supabase.table("jobs").select(
-            "job_id, title, company, location, source, source_url, posted_date, created_at"
+            "job_id, title, company, location, source, source_url, description, posted_date, created_at"
         ).eq("job_id", str(request.job_id)).execute()
         if not job_response.data:
             raise HTTPException(status_code=404, detail="Job not found")
@@ -50,12 +48,10 @@ async def analyze_job(request: JobAnalysisRequest, user_id: UUID):
         job = job_response.data[0]
         
         # Create internal request for Chain of Responsibility handlers
-        # Note: We need job description which may not be in the jobs table
-        # For now, we'll use the title and company, and fetch description if available
         internal_request = JobAnalysisRequestInternal(
             job_title=job.get("title", ""),
             company_name=job.get("company", ""),
-            job_description=job.get("source_url", ""),  # Using source_url as placeholder for description
+            job_description=job.get("description", "") or job.get("source_url", ""),  # Use description if available, fallback to source_url
             location=job.get("location"),
             salary_min=None,  # Not in jobs table schema
             salary_max=None,  # Not in jobs table schema

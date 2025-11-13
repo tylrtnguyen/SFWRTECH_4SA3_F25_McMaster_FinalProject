@@ -143,7 +143,8 @@ class JobBase(BaseModel):
     company: str = Field(..., max_length=255, description="Company name")
     location: Optional[str] = Field(None, max_length=255, description="Job location")
     source: str = Field(..., max_length=100, description="Source (e.g., linkedin, indeed, manual)")
-    source_url: Optional[str] = Field(None, description="Original job posting URL")
+    source_url: Optional[str] = Field(None, max_length=1000, description="Original job posting URL")
+    description: Optional[str] = Field(None, max_length=5000, description="Job description")
     posted_date: Optional[date] = Field(None, description="Job posting date")
 
 
@@ -169,6 +170,7 @@ class JobResponse(BaseModel):
     location: Optional[str]
     source: str
     source_url: Optional[str]
+    description: Optional[str]
     posted_date: Optional[date]
     created_at: datetime
 
