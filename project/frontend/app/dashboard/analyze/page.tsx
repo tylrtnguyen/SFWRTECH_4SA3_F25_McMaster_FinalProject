@@ -1,0 +1,14 @@
+export default function AnalyzePage() {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight text-text-primary dark:text-[#e4e6eb]">Analyze Job</h1>
+        <p className="text-text-secondary dark:text-[#b0b3b8]">
+          Analyze job postings for fraud detection and scoring
+        </p>
+      </div>
+      {/* Job analysis functionality will be implemented here */}
+    </div>
+  )
+}
+
