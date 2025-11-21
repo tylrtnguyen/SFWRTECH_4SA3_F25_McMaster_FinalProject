@@ -8,7 +8,6 @@ import {
   Calculator,
   FileCheck,
   Bookmark,
-  Settings,
   User,
   LayoutDashboard,
   ChevronLeft,
@@ -23,7 +22,6 @@ const navigation = [
   { name: "Match Score", href: "/dashboard/match", icon: Calculator },
   { name: "Resume Tips", href: "/dashboard/resume", icon: FileCheck },
   { name: "Bookmarks", href: "/dashboard/bookmarks", icon: Bookmark },
-  { name: "Settings", href: "/dashboard/settings", icon: Settings },
   { name: "Profile", href: "/dashboard/profile", icon: User },
 ]
 

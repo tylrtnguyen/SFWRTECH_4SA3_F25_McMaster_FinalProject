@@ -4,6 +4,8 @@ A modern Next.js 15+ dashboard for JobTrust - a platform to help job seekers in 
 
 ## Features
 
+- **Authentication**: Secure sign up and login with Supabase Auth
+- **Protected Routes**: Dashboard routes require authentication
 - **Dashboard Overview**: Comprehensive dashboard with key metrics and statistics
 - **Job Search**: Search jobs by URL, manual input, or file upload
 - **Job Analysis**: Analyze job postings for fraud detection and scoring
@@ -17,6 +19,7 @@ A modern Next.js 15+ dashboard for JobTrust - a platform to help job seekers in 
 
 - **Next.js 15+**: React framework with App Router
 - **TypeScript**: Type-safe development
+- **Supabase**: Authentication and database
 - **shadcn/ui**: High-quality component library
 - **Tailwind CSS**: Utility-first CSS framework
 - **Radix UI**: Accessible component primitives
@@ -116,8 +119,27 @@ frontend/
 Create a `.env.local` file in the root directory:
 
 ```env
+# Backend API URL
 NEXT_PUBLIC_API_URL=http://localhost:8000
+
+# Supabase Configuration
+NEXT_PUBLIC_SUPABASE_URL=your-supabase-project-url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
 ```
+
+### Getting Supabase Credentials
+
+1. Go to your [Supabase Dashboard](https://supabase.com/dashboard)
+2. Select your project
+3. Go to **Settings** → **API**
+4. Copy the **Project URL** and set it as `NEXT_PUBLIC_SUPABASE_URL`
+5. Copy the **anon/public** key and set it as `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+
+### Configuring Supabase Auth
+
+**Important**: This application uses password-based authentication without email confirmation.
+
+See [SUPABASE_AUTH_SETUP.md](./SUPABASE_AUTH_SETUP.md) for detailed instructions on configuring Supabase Auth settings.
 
 ## API Integration
 

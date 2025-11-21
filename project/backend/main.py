@@ -9,7 +9,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 
-from app.routers import jobs, payments, analysis, users
+from app.routers import jobs, payments, analysis, users, resumes
 from app.core.config import settings
 from app.core.singleton import DatabaseManager, StripeManager, APIConnectionManager
 
@@ -114,6 +114,7 @@ app.include_router(users.router, prefix="/api/v1/users", tags=["users"])
 app.include_router(jobs.router, prefix="/api/v1/jobs", tags=["jobs"])
 app.include_router(payments.router, prefix="/api/v1/payments", tags=["payments"])
 app.include_router(analysis.router, prefix="/api/v1/analysis", tags=["analysis"])
+app.include_router(resumes.router, prefix="/api/v1/resumes", tags=["resumes"])
 
 
 @app.get("/")

@@ -23,10 +23,10 @@ This guide explains how to create the database tables in your Supabase project.
    - You should see the following tables:
      - users
      - credit_transactions
-     - jobs
      - job_analyses
      - job_matches
      - job_bookmarks
+     - resumes
      - logs
 
 ## Method 2: Using Supabase CLI

@@ -179,7 +179,7 @@ class JobResponse(BaseModel):
 class JobAnalysisBase(BaseModel):
     """Base job analysis model"""
     user_id: UUID = Field(..., description="User who requested analysis")
-    job_id: UUID = Field(..., description="Job being analyzed")
+    job_bookmark_id: UUID = Field(..., description="Job bookmark being analyzed")
     fraud_score: Optional[Decimal] = Field(None, ge=0, le=100, description="Fraud probability score (0-100)")
     analysis_type: str = Field(..., max_length=50, description="Type: ml_model, api_based")
     credits_used: int = Field(default=2, description="Credits consumed")
@@ -211,7 +211,7 @@ class JobAnalysisResponse(BaseModel):
     """Job analysis response model"""
     analysis_id: UUID
     user_id: UUID
-    job_id: UUID
+    job_bookmark_id: UUID
     fraud_score: Optional[Decimal]
     analysis_type: str
     credits_used: int
@@ -222,8 +222,8 @@ class JobAnalysisResponse(BaseModel):
 class JobMatchBase(BaseModel):
     """Base job match model"""
     user_id: UUID = Field(..., description="User who requested match")
-    job_id: UUID = Field(..., description="Job being matched")
-    resume_id: UUID = Field(..., description="Resume version used")
+    job_bookmark_id: UUID = Field(..., description="Job bookmark being matched")
+    resume_id: UUID = Field(..., description="Resume version used (references resumes.id)")
     match_score: Optional[Decimal] = Field(None, ge=0, le=100, description="Overall match score (0-100)")
     skill_score: Optional[Decimal] = Field(None, description="Skill alignment score")
     experience_score: Optional[Decimal] = Field(None, description="Experience match score")
@@ -257,7 +257,7 @@ class JobMatchResponse(BaseModel):
     """Job match response model"""
     match_id: UUID
     user_id: UUID
-    job_id: UUID
+    job_bookmark_id: UUID
     resume_id: UUID
     match_score: Optional[Decimal]
     skill_score: Optional[Decimal]
@@ -267,11 +267,16 @@ class JobMatchResponse(BaseModel):
     created_at: datetime
 
 
-# Job Bookmark Models (inferred schema)
+# Job Bookmark Models
 class JobBookmarkBase(BaseModel):
     """Base job bookmark model"""
     user_id: UUID = Field(..., description="User who bookmarked the job")
-    job_id: UUID = Field(..., description="Bookmarked job")
+    title: str = Field(..., max_length=500, description="Job title")
+    company: str = Field(..., max_length=255, description="Company name")
+    location: Optional[str] = Field(None, max_length=255, description="Job location")
+    source: str = Field(..., max_length=100, description="Source (e.g., linkedin, indeed, manual)")
+    source_url: Optional[str] = Field(None, max_length=1000, description="Original job posting URL")
+    description: Optional[str] = Field(None, max_length=5000, description="Job description")
 
 
 class JobBookmarkCreate(JobBookmarkBase):
@@ -280,7 +285,7 @@ class JobBookmarkCreate(JobBookmarkBase):
 
 
 class JobBookmark(JobBookmarkBase):
-    """Job bookmark model"""
+    """Job bookmark model matching database schema"""
     bookmark_id: UUID = Field(..., description="Unique bookmark identifier")
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Bookmark timestamp")
     
@@ -292,7 +297,12 @@ class JobBookmarkResponse(BaseModel):
     """Job bookmark response model"""
     bookmark_id: UUID
     user_id: UUID
-    job_id: UUID
+    title: str
+    company: str
+    location: Optional[str]
+    source: str
+    source_url: Optional[str]
+    description: Optional[str]
     created_at: datetime
 
 
@@ -334,7 +344,7 @@ class LogResponse(BaseModel):
 # Request/Response Models for API Endpoints
 class JobAnalysisRequest(BaseModel):
     """Request for job analysis"""
-    job_id: UUID = Field(..., description="Job ID to analyze")
+    job_bookmark_id: UUID = Field(..., description="Job bookmark ID to analyze")
     analysis_type: str = Field(default="api_based", max_length=50, description="Type: ml_model, api_based")
 
 
@@ -363,7 +373,7 @@ class JobAnalysisResult(BaseModel):
 
 class JobMatchRequest(BaseModel):
     """Request for job matching"""
-    job_id: UUID = Field(..., description="Job ID to match")
+    job_bookmark_id: UUID = Field(..., description="Job bookmark ID to match")
     resume_id: UUID = Field(..., description="Resume ID to use for matching")
     matching_strategy: str = Field(default="balanced", max_length=50, description="Matching strategy: salary, location, skills, balanced")
 
@@ -410,3 +420,40 @@ class ValidationErrorResponse(BaseModel):
     status_code: int
     error_message: str
     error_type: str
+
+
+# Resume Models
+class ResumeBase(BaseModel):
+    """Base resume model"""
+    filename: str = Field(..., max_length=255, description="Resume filename")
+    size: int = Field(..., description="File size in bytes")
+    object_id: str = Field(..., max_length=255, description="GCP Cloud Storage bucket file ID")
+    user_id: UUID = Field(..., description="User who uploaded the resume")
+    last_match_job_bookmark_id: Optional[UUID] = Field(None, description="Last job bookmark this resume was matched against")
+    recommended_tips: Optional[str] = Field(None, description="AI-generated resume improvement tips")
+
+
+class ResumeCreate(ResumeBase):
+    """Resume creation model"""
+    pass
+
+
+class Resume(ResumeBase):
+    """Resume model matching database schema"""
+    id: UUID = Field(..., description="Unique resume identifier")
+    uploaded_date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Upload timestamp")
+    
+    class Config:
+        from_attributes = True
+
+
+class ResumeResponse(BaseModel):
+    """Resume response model"""
+    id: UUID
+    filename: str
+    size: int
+    uploaded_date: datetime
+    object_id: str
+    user_id: UUID
+    last_match_job_bookmark_id: Optional[UUID]
+    recommended_tips: Optional[str]
