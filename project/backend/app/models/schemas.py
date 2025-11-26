@@ -180,16 +180,18 @@ class JobAnalysisBase(BaseModel):
     """Base job analysis model"""
     user_id: UUID = Field(..., description="User who requested analysis")
     job_bookmark_id: UUID = Field(..., description="Job bookmark being analyzed")
-    fraud_score: Optional[Decimal] = Field(None, ge=0, le=100, description="Fraud probability score (0-100)")
+    confidence_score: Optional[Decimal] = Field(None, ge=0, le=100, description="Confidence score (0-100) from Gemini analysis")
+    is_authentic: Optional[bool] = Field(None, description="Whether the job is authentic (True) or fake (False)")
+    evidence: Optional[str] = Field(None, description="Evidence/reasoning from Gemini analysis")
     analysis_type: str = Field(..., max_length=50, description="Type: ml_model, api_based")
     credits_used: int = Field(default=2, description="Credits consumed")
     
-    @field_validator('fraud_score')
+    @field_validator('confidence_score')
     @classmethod
-    def validate_fraud_score(cls, v):
-        """Validate fraud score is between 0 and 100"""
+    def validate_confidence_score(cls, v):
+        """Validate confidence score is between 0 and 100"""
         if v is not None and (v < 0 or v > 100):
-            raise ValueError('fraud_score must be between 0 and 100')
+            raise ValueError('confidence_score must be between 0 and 100')
         return v
 
 
@@ -212,7 +214,9 @@ class JobAnalysisResponse(BaseModel):
     analysis_id: UUID
     user_id: UUID
     job_bookmark_id: UUID
-    fraud_score: Optional[Decimal]
+    confidence_score: Optional[Decimal]
+    is_authentic: Optional[bool]
+    evidence: Optional[str]
     analysis_type: str
     credits_used: int
     created_at: datetime
@@ -346,6 +350,18 @@ class JobAnalysisRequest(BaseModel):
     """Request for job analysis"""
     job_bookmark_id: UUID = Field(..., description="Job bookmark ID to analyze")
     analysis_type: str = Field(default="api_based", max_length=50, description="Type: ml_model, api_based")
+
+
+class JobUrlSearchRequest(BaseModel):
+    """Request for job search by URL"""
+    url: str = Field(..., description="Job posting URL (LinkedIn)")
+
+
+class JobUrlSearchResponse(BaseModel):
+    """Response for job search by URL"""
+    bookmark_id: UUID
+    job_data: JobBookmarkResponse
+    analysis: JobAnalysisResponse
 
 
 # Internal models for Chain of Responsibility pattern

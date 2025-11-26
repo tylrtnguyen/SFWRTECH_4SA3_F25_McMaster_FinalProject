@@ -19,15 +19,18 @@ class Settings(BaseSettings):
     # Database - Supabase
     SUPABASE_DATABASE_URL: str = ""
     SUPABASE_DATABASE_API_KEY: str = ""
+    SUPABASE_URL: str = ""
+    SUPABASE_ANON_KEY: str = ""
+    SUPABASE_JWT_SECRET: str = ""  # Supabase JWT secret for token verification
     STRIPE_WEBHOOK_SECRET: str = ""
     
     # Stripe
     STRIPE_SECRET_KEY: str = ""
     STRIPE_PUBLISHABLE_KEY: str = ""
     
-    # Ruvia Trust API
-    RUVIA_TRUST_API_KEY: str = ""
-    RUVIA_TRUST_API_URL: str = "https://api.ruviatrust.com/v1"
+    # Google APIs
+    GOOGLE_SAFE_BROWSING_API_KEY: str = ""
+    GOOGLE_GEMINI_API_KEY: str = ""
     
     # LinkedIn/Indeed
     LINKEDIN_API_KEY: str = ""

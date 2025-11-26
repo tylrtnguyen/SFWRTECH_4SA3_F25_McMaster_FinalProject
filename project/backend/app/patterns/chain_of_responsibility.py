@@ -32,23 +32,42 @@ class JobAnalysisHandler(ABC):
 
 
 class FraudDetectionHandler(JobAnalysisHandler):
-    """Handler for fraud detection using Ruvia Trust API"""
+    """Handler for fraud detection using Gemini API (replaces Ruvia Trust)"""
     
     async def handle(self, request: JobAnalysisRequestInternal, result: JobAnalysisResult) -> JobAnalysisResult:
-        """Detect fraud in job posting"""
-        from app.services.ruvia_service import RuviaTrustService
+        """Detect fraud/authenticity in job posting using Gemini API"""
+        from app.services.gemini_service import GeminiService
         
         try:
-            ruvia_service = RuviaTrustService()
-            fraud_analysis = await ruvia_service.analyze_job_fraud(
+            gemini_service = GeminiService()
+            authenticity_analysis = await gemini_service.analyze_job_authenticity(
                 job_title=request.job_title,
-                company_name=request.company_name,
-                job_description=request.job_description
+                company=request.company_name,
+                location=request.location,
+                description=request.job_description
             )
             
-            result.fraud_score = fraud_analysis.get("fraud_score", 0.0)
-            result.fraud_indicators = fraud_analysis.get("indicators", [])
-            result.is_fraudulent = fraud_analysis.get("is_fraudulent", False)
+            # Map Gemini results to JobAnalysisResult
+            # is_authentic=True means job is real, so is_fraudulent=False
+            result.is_fraudulent = not authenticity_analysis.get("is_authentic", False)
+            
+            # Map confidence_score (0-100) to fraud_score (0-1 scale)
+            # Higher confidence that job is authentic = lower fraud score
+            confidence_score = authenticity_analysis.get("confidence_score", 50.0)
+            if result.is_fraudulent:
+                # If fake, fraud_score = confidence_score / 100
+                result.fraud_score = confidence_score / 100.0
+            else:
+                # If authentic, fraud_score = (100 - confidence_score) / 100
+                result.fraud_score = (100.0 - confidence_score) / 100.0
+            
+            # Store evidence as fraud indicators
+            evidence = authenticity_analysis.get("evidence", "")
+            if evidence:
+                result.fraud_indicators = [evidence]
+            else:
+                result.fraud_indicators = []
+                
         except Exception as e:
             result.errors.append(f"Fraud detection error: {str(e)}")
         
@@ -109,6 +128,8 @@ class SuggestionHandler(JobAnalysisHandler):
             # Suggestion based on fraud score
             if result.fraud_score and result.fraud_score > 0.7:
                 suggestions.append("High fraud risk detected. Verify company credentials.")
+            elif result.is_fraudulent:
+                suggestions.append("Job authenticity verification failed. Exercise caution.")
             
             # Suggestion based on match score
             if result.match_score and result.match_score < 0.5:

@@ -1,21 +1,67 @@
 "use client"
 
 import { useState } from "react"
-import { Search, Link as LinkIcon, FileText, Upload, Bookmark, Sparkles } from "lucide-react"
+import { Search, Link as LinkIcon, FileText, Upload, Bookmark, Sparkles, Loader2, AlertCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { JobForm, type JobFormData } from "@/components/job-form"
+import { searchJobByUrl, type JobUrlSearchResponse } from "@/lib/api/client"
+import { JobSearchResults } from "@/components/job-search-results"
 
 export function JobSearch() {
   const [url, setUrl] = useState("")
   const [file, setFile] = useState<File | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [loadingMessage, setLoadingMessage] = useState("")
+  const [error, setError] = useState<string | null>(null)
+  const [searchResult, setSearchResult] = useState<JobUrlSearchResponse | null>(null)
 
-  const handleUrlSubmit = (e: React.FormEvent) => {
+  // URL validation regex patterns
+  const linkedinUrlPattern = /^https?:\/\/(www\.)?linkedin\.com\/jobs\/view\//
+  const indeedUrlPattern = /^https?:\/\/([a-z]{2}\.)?(www\.)?indeed\.com\/viewjob\?jk=/
+
+  const validateJobUrl = (url: string): boolean => {
+    if (!url.trim()) return false
+    const normalizedUrl = url.startsWith("http") ? url : `https://${url}`
+    return linkedinUrlPattern.test(normalizedUrl) || indeedUrlPattern.test(normalizedUrl)
+  }
+
+  const handleUrlSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // TODO: Implement URL job search
-    console.log("Searching job by URL:", url)
+    setError(null)
+    setSearchResult(null)
+    
+    // Validate URL format
+    if (!validateJobUrl(url)) {
+      setError("Please enter a valid LinkedIn or Indeed job URL (e.g., https://www.linkedin.com/jobs/view/... or https://ca.indeed.com/viewjob?jk=...)")
+      return
+    }
+    
+    setIsLoading(true)
+    setLoadingMessage("Verifying URL safety...")
+    
+    try {
+      // Normalize URL
+      const normalizedUrl = url.startsWith("http") ? url : `https://${url}`
+      
+      setLoadingMessage("Scraping job data...")
+      const result = await searchJobByUrl(normalizedUrl)
+      
+      setLoadingMessage("Analyzing authenticity...")
+      // Small delay to show the loading message
+      await new Promise((resolve) => setTimeout(resolve, 500))
+      
+      setSearchResult(result)
+      setUrl("") // Clear input on success
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to search job. Please try again."
+      setError(errorMessage)
+    } finally {
+      setIsLoading(false)
+      setLoadingMessage("")
+    }
   }
 
   const handleManualSubmit = async (data: JobFormData) => {
@@ -35,7 +81,7 @@ export function JobSearch() {
   return (
     <Card className="mb-6">
       <CardHeader>
-        <CardTitle className="text-text-primary dark:text-[#e4e6eb]">Search or Add Job</CardTitle>
+        <CardTitle className="text-text-primary dark:text-[#e4e6eb]">Search and Add Job</CardTitle>
         <CardDescription className="text-text-secondary dark:text-[#b0b3b8]">
           Search for jobs by URL, manually input job details, or upload a job posting
         </CardDescription>
@@ -66,20 +112,52 @@ export function JobSearch() {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="url" className="mt-4">
+          <TabsContent value="url" className="mt-4 space-y-4">
             <form onSubmit={handleUrlSubmit} className="flex gap-2">
               <Input
                 type="url"
-                placeholder="Enter job posting URL (LinkedIn, Indeed, etc.)"
+                placeholder="Enter LinkedIn or Indeed job URL (e.g., https://www.linkedin.com/jobs/view/... or https://ca.indeed.com/viewjob?jk=...)"
                 value={url}
-                onChange={(e) => setUrl(e.target.value)}
+                onChange={(e) => {
+                  setUrl(e.target.value)
+                  setError(null)
+                  setSearchResult(null)
+                }}
+                disabled={isLoading}
                 className="flex-1 placeholder:text-text-secondary dark:placeholder:text-[#8993A4]"
               />
-              <Button type="submit">
-                <Search className="mr-2 h-4 w-4" />
-                Search
+              <Button type="submit" disabled={isLoading || !url.trim()}>
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <Search className="mr-2 h-4 w-4" />
+                    Search
+                  </>
+                )}
               </Button>
             </form>
+            
+            {isLoading && loadingMessage && (
+              <div className="flex items-center gap-2 text-sm text-text-secondary dark:text-[#b0b3b8]">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>{loadingMessage}</span>
+              </div>
+            )}
+            
+            {error && (
+              <div className="flex items-start gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+                <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+            
+            {searchResult && (
+              <JobSearchResults result={searchResult} />
+            )}
           </TabsContent>
 
           <TabsContent value="manual" className="mt-4">

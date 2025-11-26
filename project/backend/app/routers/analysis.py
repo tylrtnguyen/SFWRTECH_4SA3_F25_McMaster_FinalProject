@@ -71,11 +71,22 @@ async def analyze_job(request: JobAnalysisRequest, user_id: UUID):
         analysis_id = uuid4()
         created_at = datetime.now(timezone.utc)
         
+        # Map fraud_score (0-1) to confidence_score (0-100)
+        # For now, we'll calculate confidence_score from fraud_score
+        # In the URL search endpoint, this will come directly from Gemini
+        confidence_score = None
+        if analysis_result.fraud_score is not None:
+            # Convert fraud_score (0-1) to confidence_score (0-100)
+            # Lower fraud = higher confidence in authenticity
+            confidence_score = (1.0 - analysis_result.fraud_score) * 100.0
+        
         supabase.table("job_analyses").insert({
             "analysis_id": str(analysis_id),
             "user_id": str(user_id),
             "job_bookmark_id": str(request.job_bookmark_id),
-            "fraud_score": float(analysis_result.fraud_score) if analysis_result.fraud_score else None,
+            "confidence_score": float(confidence_score) if confidence_score is not None else None,
+            "is_authentic": not analysis_result.is_fraudulent if analysis_result.is_fraudulent is not None else None,
+            "evidence": analysis_result.fraud_indicators[0] if analysis_result.fraud_indicators else None,
             "analysis_type": request.analysis_type,
             "credits_used": 2
         }).execute()
@@ -85,7 +96,9 @@ async def analyze_job(request: JobAnalysisRequest, user_id: UUID):
             analysis_id=analysis_id,
             user_id=user_id,
             job_bookmark_id=request.job_bookmark_id,
-            fraud_score=analysis_result.fraud_score,
+            confidence_score=confidence_score,
+            is_authentic=not analysis_result.is_fraudulent if analysis_result.is_fraudulent is not None else None,
+            evidence=analysis_result.fraud_indicators[0] if analysis_result.fraud_indicators else None,
             analysis_type=request.analysis_type,
             credits_used=2,
             created_at=created_at
@@ -122,7 +135,7 @@ async def get_analysis_history(user_id: UUID, limit: int = 10):
         supabase = db_manager.get_connection()
         
         response = supabase.table("job_analyses").select(
-            "analysis_id, job_bookmark_id, fraud_score, created_at"
+            "analysis_id, job_bookmark_id, confidence_score, is_authentic, evidence, created_at"
         ).eq("user_id", str(user_id)).order("created_at", desc=True).limit(limit).execute()
         
         analyses = []
@@ -130,7 +143,9 @@ async def get_analysis_history(user_id: UUID, limit: int = 10):
             analyses.append({
                 "id": row["analysis_id"],
                 "job_bookmark_id": row["job_bookmark_id"],
-                "fraud_score": row["fraud_score"],
+                "confidence_score": row.get("confidence_score"),
+                "is_authentic": row.get("is_authentic"),
+                "evidence": row.get("evidence"),
                 "created_at": row["created_at"]
             })
         

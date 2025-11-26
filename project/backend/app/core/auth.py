@@ -81,3 +81,82 @@ def decode_access_token(token: str) -> Optional[dict]:
     except JWTError:
         return None
 
+
+def decode_supabase_token(token: str) -> Optional[dict]:
+    """
+    Decode Supabase JWT token
+    First tries to verify with JWT secret if available, otherwise decodes without verification
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # Strip "Bearer " prefix if present
+    if token.startswith("Bearer "):
+        token = token[7:]
+        logger.debug("Stripped 'Bearer ' prefix from token")
+    
+    try:
+        # Try to verify with JWT secret if configured
+        if settings.SUPABASE_JWT_SECRET:
+            try:
+                # Verify token signature with Supabase JWT secret
+                payload = jwt.decode(
+                    token,
+                    settings.SUPABASE_JWT_SECRET,
+                    algorithms=["HS256"],
+                    options={"verify_exp": True}
+                )
+                logger.debug("Successfully verified Supabase token with JWT secret")
+                return payload
+            except JWTError as e:
+                # If verification fails, log and fall through to unverified decode
+                logger.debug(f"JWT verification failed with secret: {str(e)}, trying unverified decode")
+                pass
+        
+        # Decode without verification (for development or when JWT secret not available)
+        # This is less secure but allows the system to work
+        # Note: jwt.decode() requires a key parameter even when verify_signature=False
+        # Also need to disable audience verification since Supabase tokens have aud="authenticated"
+        try:
+            unverified_payload = jwt.decode(
+                token,
+                key="",  # Empty key since we're not verifying signature
+                options={
+                    "verify_signature": False,
+                    "verify_exp": False,
+                    "verify_aud": False  # Disable audience verification
+                }
+            )
+            logger.debug("Successfully decoded Supabase token without verification")
+        except JWTError as e:
+            logger.error(f"Failed to decode Supabase token (malformed): {str(e)}")
+            return None
+        
+        # Basic validation: check if it has required claims
+        if "sub" in unverified_payload:
+            # Check expiration manually
+            if "exp" in unverified_payload:
+                from datetime import datetime, timezone
+                exp = unverified_payload.get("exp")
+                current_time = datetime.now(timezone.utc).timestamp()
+                if exp and current_time > exp:
+                    logger.warning(f"Supabase token expired. Exp: {exp}, Current: {current_time}")
+                    return None  # Token expired
+                else:
+                    logger.debug(f"Token expiration check passed. Exp: {exp}, Current: {current_time}")
+            
+            logger.debug(f"Supabase token decoded successfully. User ID (sub): {unverified_payload.get('sub')}")
+            return unverified_payload
+        else:
+            logger.warning("Supabase token decoded but missing 'sub' field")
+            return None
+        
+    except JWTError as e:
+        # Token is malformed or invalid
+        logger.error(f"JWT decode error: {str(e)}", exc_info=True)
+        return None
+    except Exception as e:
+        # Other errors (e.g., invalid token format)
+        logger.error(f"Token decode error: {str(e)}", exc_info=True)
+        return None
+

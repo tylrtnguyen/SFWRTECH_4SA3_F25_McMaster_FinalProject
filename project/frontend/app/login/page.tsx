@@ -57,19 +57,19 @@ export default function LoginPage() {
         return
       }
 
-      // Wait for the session to be established and cookies to be synced
-      // The @supabase/ssr createBrowserClient automatically syncs session to cookies
-      // But we need to wait a bit for the sync to complete
-      await new Promise((resolve) => setTimeout(resolve, 300))
-
-      // Verify session was created
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
-      
-      if (!session || sessionError) {
+      // Use the session from signInData directly
+      // signInData contains the session and user immediately after successful sign-in
+      if (!signInData.session || !signInData.user) {
         setError("Failed to establish session. Please try again.")
         setIsLoading(false)
         return
       }
+
+      // The @supabase/ssr createBrowserClient automatically syncs session to cookies
+      // The session is already available in signInData, so we can proceed
+      // However, we need to ensure cookies are set before redirecting
+      // Force a session refresh to ensure cookies are synced
+      await supabase.auth.getSession()
 
       // Get redirect destination
       const redirectTo = searchParams.get("redirectTo") || "/dashboard"
@@ -77,8 +77,8 @@ export default function LoginPage() {
       // Ensure it's a relative path
       const redirectPath = redirectTo.startsWith("/") ? redirectTo : `/${redirectTo}`
       
-      // Use window.location for a full page reload to ensure cookies are properly set
-      // This gives the browser time to set cookies before middleware runs
+      // Use window.location for a full page reload
+      // The cookies should be set by createBrowserClient automatically
       window.location.href = redirectPath
     } catch (err) {
       setError("An unexpected error occurred. Please try again.")

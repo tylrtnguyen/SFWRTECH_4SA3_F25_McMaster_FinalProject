@@ -27,9 +27,16 @@ export function Navbar() {
   }, [])
 
   const handleLogout = async () => {
-    await supabase.auth.signOut()
-    router.push("/login")
-    router.refresh()
+    // Sign out with scope: 'local' to clear local session and cookies
+    const { error } = await supabase.auth.signOut({ scope: 'local' })
+    
+    if (error) {
+      console.error("Error signing out:", error)
+    }
+    
+    // Force a full page reload to ensure cookies are cleared
+    // This ensures middleware can properly detect the logout
+    window.location.href = "/login"
   }
 
   return (

@@ -3,6 +3,7 @@ FastAPI Backend Application
 Main entry point for the job matching and analysis API
 """
 
+import logging
 from fastapi import FastAPI, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
@@ -13,6 +14,12 @@ from app.routers import jobs, payments, analysis, users, resumes
 from app.core.config import settings
 from app.core.singleton import DatabaseManager, StripeManager, APIConnectionManager
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,  # Set to INFO to see info logs, DEBUG for more verbose
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -24,7 +31,6 @@ async def lifespan(app: FastAPI):
     yield
     # Shutdown: Cleanup if needed
     pass
-
 
 app = FastAPI(
     title="Job Matching & Analysis API",
@@ -131,4 +137,3 @@ async def root():
 async def health_check():
     """Health check endpoint"""
     return {"status": "healthy"}
-
