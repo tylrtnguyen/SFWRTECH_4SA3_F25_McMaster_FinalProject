@@ -243,6 +243,87 @@ export async function getBookmarks(): Promise<JobBookmarkData[]> {
 }
 
 /**
+ * Get detailed bookmark information
+ */
+export async function getBookmarkDetail(bookmarkId: string): Promise<JobBookmarkData> {
+  const supabase = createClient()
+  const { data: { session } } = await supabase.auth.getSession()
+
+  if (!session?.access_token) {
+    throw new Error("No authentication token found")
+  }
+
+  const response = await fetch(`${API_BASE_URL}/api/v1/jobs/bookmarks/${bookmarkId}`, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${session.access_token}`
+    }
+  })
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }))
+    throw new Error(errorData.detail || 'Failed to fetch bookmark details')
+  }
+
+  return response.json()
+}
+
+/**
+ * Update a bookmark
+ */
+export async function updateBookmark(
+  bookmarkId: string,
+  updates: Partial<JobBookmarkData>
+): Promise<JobBookmarkData> {
+  const supabase = createClient()
+  const { data: { session } } = await supabase.auth.getSession()
+
+  if (!session?.access_token) {
+    throw new Error("No authentication token found")
+  }
+
+  const response = await fetch(`${API_BASE_URL}/api/v1/jobs/bookmarks/${bookmarkId}`, {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Bearer ${session.access_token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(updates)
+  })
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }))
+    throw new Error(errorData.detail || 'Failed to update bookmark')
+  }
+
+  return response.json()
+}
+
+/**
+ * Delete a bookmark
+ */
+export async function deleteBookmark(bookmarkId: string): Promise<void> {
+  const supabase = createClient()
+  const { data: { session } } = await supabase.auth.getSession()
+
+  if (!session?.access_token) {
+    throw new Error("No authentication token found")
+  }
+
+  const response = await fetch(`${API_BASE_URL}/api/v1/jobs/bookmarks/${bookmarkId}`, {
+    method: 'DELETE',
+    headers: {
+      'Authorization': `Bearer ${session.access_token}`
+    }
+  })
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }))
+    throw new Error(errorData.detail || 'Failed to delete bookmark')
+  }
+}
+
+/**
  * Upload and analyze job document
  */
 export async function uploadJobDocument(file: File): Promise<JobUrlSearchResponse> {

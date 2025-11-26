@@ -340,6 +340,17 @@ class JobBookmark(JobBookmarkBase):
         from_attributes = True
 
 
+class JobBookmarkUpdate(BaseModel):
+    """Job bookmark update model"""
+    title: Optional[str] = None
+    company: Optional[str] = None
+    location: Optional[str] = None
+    source: Optional[str] = None
+    source_url: Optional[str] = None
+    description: Optional[str] = None
+    application_status: Optional[ApplicationStatus] = None
+    job_industry_id: Optional[int] = None
+
 class JobBookmarkResponse(BaseModel):
     """Job bookmark response model"""
     bookmark_id: UUID
@@ -359,6 +370,12 @@ class JobBookmarkResponse(BaseModel):
     confidence_score: Optional[float] = Field(None, description="Confidence score of the analysis")
     analysis_evidence: Optional[str] = Field(None, description="Analysis evidence/reasoning")
     analysis_type: Optional[str] = Field(None, description="Type of analysis performed")
+
+class JobBookmarkDetailResponse(JobBookmarkResponse):
+    """Detailed bookmark response with analysis data"""
+    # Inherits all fields from JobBookmarkResponse
+    # Analysis data is always included in detail view
+    pass
 
 
 # Log Models

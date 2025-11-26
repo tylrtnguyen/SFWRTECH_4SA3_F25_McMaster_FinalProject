@@ -18,6 +18,8 @@ from app.models.schemas import (
     JobUrlSearchRequest,
     JobUrlSearchResponse,
     JobBookmarkResponse,
+    JobBookmarkUpdate,
+    JobBookmarkDetailResponse,
     JobManualSubmitRequest,
     ExtractedJobData,
     ApplicationStatus,
@@ -191,6 +193,138 @@ async def get_user_bookmarks(current_user_id: UUID = Depends(get_current_user_id
     except Exception as e:
         logger.error(f"Failed to get user bookmarks: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to get bookmarks: {str(e)}")
+
+
+@router.get("/bookmarks/{bookmark_id}", response_model=JobBookmarkDetailResponse)
+async def get_bookmark_detail(
+    bookmark_id: UUID,
+    current_user_id: UUID = Depends(get_current_user_id)
+):
+    """
+    Get detailed bookmark information with full analysis data
+    """
+    try:
+        db_manager = DatabaseManager.get_instance()
+        supabase = db_manager.get_connection()
+
+        # Get bookmark with analysis data
+        response = supabase.table("job_bookmarks").select("""
+            *,
+            job_industry(description),
+            job_analyses(*)
+        """).eq("bookmark_id", str(bookmark_id)).eq("user_id", str(current_user_id)).execute()
+
+        if not response.data:
+            raise HTTPException(status_code=404, detail="Bookmark not found")
+
+        item = response.data[0]
+        analyses = item.get("job_analyses", [])
+
+        # Get the most recent analysis
+        latest_analysis = None
+        if analyses:
+            latest_analysis = max(analyses, key=lambda x: x.get("created_at", ""))
+
+        return JobBookmarkDetailResponse(
+            bookmark_id=UUID(item["bookmark_id"]),
+            user_id=current_user_id,
+            title=item["title"],
+            company=item["company"],
+            location=item.get("location"),
+            source=item["source"],
+            source_url=item.get("source_url"),
+            description=item.get("description", ""),
+            application_status=ApplicationStatus(item.get("application_status", "interested")),
+            created_at=datetime.fromisoformat(item["created_at"].replace("Z", "+00:00")) if isinstance(item["created_at"], str) else item["created_at"],
+            job_industry_id=item.get("job_industry_id"),
+            is_authentic=latest_analysis.get("is_authentic") if latest_analysis else None,
+            confidence_score=latest_analysis.get("confidence_score") if latest_analysis else None,
+            analysis_evidence=latest_analysis.get("evidence") if latest_analysis else None,
+            analysis_type=latest_analysis.get("analysis_type") if latest_analysis else None
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get bookmark detail: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get bookmark details: {str(e)}")
+
+
+@router.put("/bookmarks/{bookmark_id}", response_model=JobBookmarkResponse)
+async def update_bookmark(
+    bookmark_id: UUID,
+    bookmark_update: JobBookmarkUpdate,
+    current_user_id: UUID = Depends(get_current_user_id)
+):
+    """
+    Update a bookmark
+    """
+    try:
+        db_manager = DatabaseManager.get_instance()
+        supabase = db_manager.get_connection()
+
+        # Verify bookmark ownership
+        existing = supabase.table("job_bookmarks").select("bookmark_id").eq(
+            "bookmark_id", str(bookmark_id)
+        ).eq("user_id", str(current_user_id)).execute()
+
+        if not existing.data:
+            raise HTTPException(status_code=404, detail="Bookmark not found")
+
+        # Prepare update data
+        update_data = {}
+        for field, value in bookmark_update.dict(exclude_unset=True).items():
+            if value is not None:
+                update_data[field] = value
+
+        if not update_data:
+            raise HTTPException(status_code=400, detail="No fields to update")
+
+        # Update bookmark
+        response = supabase.table("job_bookmarks").update(update_data).eq(
+            "bookmark_id", str(bookmark_id)
+        ).execute()
+
+        if not response.data:
+            raise HTTPException(status_code=500, detail="Failed to update bookmark")
+
+        # Return updated bookmark
+        return await get_bookmark_detail(bookmark_id, current_user_id)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update bookmark: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to update bookmark: {str(e)}")
+
+
+@router.delete("/bookmarks/{bookmark_id}")
+async def delete_bookmark(
+    bookmark_id: UUID,
+    current_user_id: UUID = Depends(get_current_user_id)
+):
+    """
+    Delete a bookmark
+    """
+    try:
+        db_manager = DatabaseManager.get_instance()
+        supabase = db_manager.get_connection()
+
+        # Verify bookmark ownership and delete
+        response = supabase.table("job_bookmarks").delete().eq(
+            "bookmark_id", str(bookmark_id)
+        ).eq("user_id", str(current_user_id)).execute()
+
+        if not response.data:
+            raise HTTPException(status_code=404, detail="Bookmark not found")
+
+        return {"message": "Bookmark deleted successfully"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete bookmark: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete bookmark: {str(e)}")
 
 
 @router.get("/debug-gemini-models")

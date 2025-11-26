@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import dynamic from "next/dynamic"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -20,10 +19,39 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { CheckCircle, XCircle, MoreHorizontal, Download, Eye, Edit, Trash2 } from "lucide-react"
-import { getBookmarks, type JobBookmarkData } from "@/lib/api/client"
+import ReactMarkdown from "react-markdown"
+import { getBookmarks, getBookmarkDetail, updateBookmark, deleteBookmark, type JobBookmarkData } from "@/lib/api/client"
+import { useToast } from "@/hooks/use-toast"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 // Helper function to capitalize first letter
 const capitalize = (str: string) => str.charAt(0).toUpperCase() + str.slice(1)
+
+// Helper function to truncate text
+const truncateText = (text: string, maxLength: number) => {
+  if (text.length <= maxLength) return text
+  return text.slice(0, maxLength) + "..."
+}
 
 // Source mapping configuration
 const sourceConfig = {
@@ -56,6 +84,18 @@ export default function BookmarksPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [mounted, setMounted] = useState(false)
+  const { toast } = useToast()
+
+  // Modal states
+  const [viewModalOpen, setViewModalOpen] = useState(false)
+  const [editModalOpen, setEditModalOpen] = useState(false)
+  const [selectedBookmark, setSelectedBookmark] = useState<JobBookmarkData | null>(null)
+  const [editingBookmark, setEditingBookmark] = useState<JobBookmarkData | null>(null)
+  const [isUpdating, setIsUpdating] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [bookmarkToDelete, setBookmarkToDelete] = useState<JobBookmarkData | null>(null)
+  const [descriptionExpanded, setDescriptionExpanded] = useState(false)
+  const [analysisExpanded, setAnalysisExpanded] = useState(false)
 
   // Reusable header component
   const PageHeader = () => (
@@ -90,11 +130,16 @@ export default function BookmarksPage() {
     if (!mounted) return // Prevent SSR issues
 
     if (bookmarks.length === 0) {
-      alert("No bookmarks to export")
+      toast({
+        title: "No bookmarks to export",
+        description: "Add some bookmarks first before exporting.",
+        variant: "destructive",
+      })
       return
     }
 
     const headers = [
+      "#",
       "Title",
       "Company",
       "Location",
@@ -106,6 +151,7 @@ export default function BookmarksPage() {
     ]
 
     const csvData = bookmarks.map((bookmark, index) => [
+      index + 1,
       bookmark.title,
       bookmark.company,
       bookmark.location || "N/A",
@@ -121,7 +167,7 @@ export default function BookmarksPage() {
 
     const csvContent = [
       headers.join(","),
-      ...csvData.map(row => row.map(cell => `"${cell.replace(/"/g, '""')}"`).join(",")) // Escape quotes properly
+      ...csvData.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(",")) // Escape quotes properly
     ].join("\n")
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
@@ -134,25 +180,101 @@ export default function BookmarksPage() {
     link.click()
     document.body.removeChild(link)
 
-    alert("Bookmarks exported successfully")
+    toast({
+      title: "Export successful",
+      description: `Downloaded ${bookmarks.length} bookmarks to CSV.`,
+      variant: "success",
+    })
   }
 
-  const handleView = (bookmark: JobBookmarkData) => {
+  const handleView = async (bookmark: JobBookmarkData) => {
     if (!mounted) return
-    // TODO: Navigate to bookmark details page
-    alert("View functionality coming soon")
+
+    try {
+      const detail = await getBookmarkDetail(bookmark.bookmark_id)
+      setSelectedBookmark(detail)
+      setViewModalOpen(true)
+    } catch (error) {
+      toast({
+        title: "Failed to load details",
+        description: "Unable to fetch bookmark details. Please try again.",
+        variant: "destructive",
+      })
+    }
   }
 
   const handleEdit = (bookmark: JobBookmarkData) => {
     if (!mounted) return
-    // TODO: Open edit modal or navigate to edit page
-    alert("Edit functionality coming soon")
+    setEditingBookmark({ ...bookmark }) // Create a copy for editing
+    setEditModalOpen(true)
   }
 
-  const handleDelete = (bookmark: JobBookmarkData) => {
-    if (!mounted) return
-    // TODO: Implement delete functionality with confirmation
-    alert("Delete functionality coming soon")
+  const handleDelete = async () => {
+    if (!bookmarkToDelete || !mounted) return
+
+    try {
+      await deleteBookmark(bookmarkToDelete.bookmark_id)
+
+      // Remove from local state
+      setBookmarks(prev => prev.filter(b => b.bookmark_id !== bookmarkToDelete.bookmark_id))
+
+      toast({
+        title: "Bookmark deleted",
+        description: `"${bookmarkToDelete.title}" has been removed from your bookmarks.`,
+        variant: "success",
+      })
+    } catch (error) {
+      console.error("Failed to delete bookmark:", error)
+      toast({
+        title: "Delete failed",
+        description: "Unable to delete bookmark. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setDeleteDialogOpen(false)
+      setBookmarkToDelete(null)
+    }
+  }
+
+  const openDeleteDialog = (bookmark: JobBookmarkData) => {
+    setBookmarkToDelete(bookmark)
+    setDeleteDialogOpen(true)
+  }
+
+  const handleUpdateBookmark = async () => {
+    if (!editingBookmark) return
+
+    setIsUpdating(true)
+    try {
+      const updated = await updateBookmark(editingBookmark.bookmark_id, {
+        title: editingBookmark.title,
+        company: editingBookmark.company,
+        location: editingBookmark.location,
+        application_status: editingBookmark.application_status,
+        description: editingBookmark.description
+      })
+
+      // Update the bookmarks list
+      setBookmarks(prev => prev.map(b =>
+        b.bookmark_id === updated.bookmark_id ? updated : b
+      ))
+
+      setEditModalOpen(false)
+      setEditingBookmark(null)
+      toast({
+        title: "Bookmark updated",
+        description: `"${editingBookmark.title}" has been updated successfully.`,
+        variant: "success",
+      })
+    } catch (error) {
+      toast({
+        title: "Update failed",
+        description: "Unable to update bookmark. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsUpdating(false)
+    }
   }
 
   if (!mounted || loading) {
@@ -316,7 +438,7 @@ export default function BookmarksPage() {
                             Edit
                           </DropdownMenuItem>
                           <DropdownMenuItem
-                            onClick={() => handleDelete(bookmark)}
+                            onClick={() => openDeleteDialog(bookmark)}
                             className="text-red-600"
                           >
                             <Trash2 className="mr-2 h-4 w-4" />
@@ -332,6 +454,242 @@ export default function BookmarksPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* View Details Modal */}
+      <Dialog open={viewModalOpen} onOpenChange={(open) => {
+        setViewModalOpen(open)
+        if (!open) {
+          setDescriptionExpanded(false)
+          setAnalysisExpanded(false)
+        }
+      }}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{selectedBookmark?.title}</DialogTitle>
+            <DialogDescription>{selectedBookmark?.company}</DialogDescription>
+          </DialogHeader>
+
+          {selectedBookmark && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <dt className="text-sm font-medium text-muted-foreground">Location</dt>
+                  <dd className="text-sm text-foreground">{selectedBookmark.location || "Not specified"}</dd>
+                </div>
+                <div className="space-y-1">
+                  <dt className="text-sm font-medium text-muted-foreground">Source</dt>
+                  <dd className="text-sm text-foreground">{selectedBookmark.source}</dd>
+                </div>
+                <div className="space-y-1">
+                  <dt className="text-sm font-medium text-muted-foreground">Application Status</dt>
+                  <dd className="text-sm text-foreground">{selectedBookmark.application_status.replace('_', ' ')}</dd>
+                </div>
+                <div className="space-y-1">
+                  <dt className="text-sm font-medium text-muted-foreground">Created</dt>
+                  <dd className="text-sm text-foreground">{new Date(selectedBookmark.created_at).toLocaleDateString()}</dd>
+                </div>
+              </div>
+
+              {selectedBookmark.source_url && (
+                <div className="space-y-1">
+                  <dt className="text-sm font-medium text-muted-foreground">Source URL</dt>
+                  <dd>
+                    <a
+                      href={selectedBookmark.source_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 underline text-sm break-all"
+                    >
+                      {selectedBookmark.source_url}
+                    </a>
+                  </dd>
+                </div>
+              )}
+
+              {selectedBookmark.description && (
+                <div className="space-y-2">
+                  <dt className="text-sm font-medium text-muted-foreground">Description</dt>
+                  <dd className="text-sm text-foreground prose prose-sm max-w-none dark:prose-invert">
+                    <ReactMarkdown>
+                      {descriptionExpanded
+                        ? selectedBookmark.description
+                        : truncateText(selectedBookmark.description, 2500)
+                      }
+                    </ReactMarkdown>
+                    {selectedBookmark.description.length > 2500 && (
+                      <button
+                        onClick={() => setDescriptionExpanded(!descriptionExpanded)}
+                        className="text-primary hover:text-primary/80 text-sm font-medium mt-2 transition-colors"
+                      >
+                        {descriptionExpanded ? "View Less" : "View More"}
+                      </button>
+                    )}
+                  </dd>
+                </div>
+              )}
+
+              {selectedBookmark.is_authentic !== null && (
+                <div className="space-y-2">
+                  <dt className="text-sm font-medium text-muted-foreground">Authenticity Analysis</dt>
+                  <dd>
+                    <div className="p-3 bg-muted rounded-md border">
+                      <div className="flex items-center gap-2 mb-2">
+                        {selectedBookmark.is_authentic ? (
+                          <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+                        ) : (
+                          <XCircle className="h-5 w-5 text-red-600 dark:text-red-400" />
+                        )}
+                        <span className="font-medium text-foreground">
+                          {selectedBookmark.is_authentic ? "Genuine Job" : "Suspicious"}
+                        </span>
+                        {selectedBookmark.confidence_score && (
+                          <span className="text-sm text-muted-foreground">
+                            ({selectedBookmark.confidence_score}% confidence)
+                          </span>
+                        )}
+                      </div>
+                      {selectedBookmark.analysis_evidence && (
+                        <div className="text-sm text-foreground prose prose-sm max-w-none dark:prose-invert">
+                          <ReactMarkdown>
+                            {analysisExpanded
+                              ? selectedBookmark.analysis_evidence
+                              : truncateText(selectedBookmark.analysis_evidence, 2500)
+                            }
+                          </ReactMarkdown>
+                          {selectedBookmark.analysis_evidence.length > 2500 && (
+                            <button
+                              onClick={() => setAnalysisExpanded(!analysisExpanded)}
+                              className="text-primary hover:text-primary/80 text-sm font-medium mt-2 transition-colors"
+                            >
+                              {analysisExpanded ? "View Less" : "View More"}
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </dd>
+                </div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Modal */}
+      <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Bookmark</DialogTitle>
+            <DialogDescription>
+              Update the bookmark information
+            </DialogDescription>
+          </DialogHeader>
+
+          {editingBookmark && (
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium text-foreground">Job Title</label>
+                <Input
+                  value={editingBookmark.title}
+                  onChange={(e) => setEditingBookmark(prev => prev ?
+                    { ...prev, title: e.target.value } : null
+                  )}
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-foreground">Company</label>
+                <Input
+                  value={editingBookmark.company}
+                  onChange={(e) => setEditingBookmark(prev => prev ?
+                    { ...prev, company: e.target.value } : null
+                  )}
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-foreground">Location</label>
+                <Input
+                  value={editingBookmark.location || ""}
+                  onChange={(e) => setEditingBookmark(prev => prev ?
+                    { ...prev, location: e.target.value } : null
+                  )}
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-foreground">Application Status</label>
+                <Select
+                  value={editingBookmark.application_status}
+                  onValueChange={(value: any) =>
+                    setEditingBookmark(prev => prev ?
+                      { ...prev, application_status: value } : null
+                    )
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="interested">Interested</SelectItem>
+                    <SelectItem value="applied">Applied</SelectItem>
+                    <SelectItem value="interviewing">Interviewing</SelectItem>
+                    <SelectItem value="interviewed_passed">Interviewed - Passed</SelectItem>
+                    <SelectItem value="interviewed_failed">Interviewed - Failed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-foreground">Description</label>
+                <Textarea
+                  value={editingBookmark.description || ""}
+                  onChange={(e) => setEditingBookmark(prev => prev ?
+                    { ...prev, description: e.target.value } : null
+                  )}
+                  rows={6}
+                  placeholder="Enter job description..."
+                />
+              </div>
+
+              <div className="flex gap-2 pt-4">
+                <Button
+                  onClick={handleUpdateBookmark}
+                  disabled={isUpdating}
+                  className="flex-1"
+                >
+                  {isUpdating ? "Updating..." : "Update Bookmark"}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setEditModalOpen(false)}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Modal */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Bookmark</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete &quot;{bookmarkToDelete?.title}&quot;? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
