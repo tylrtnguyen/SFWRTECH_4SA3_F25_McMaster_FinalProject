@@ -6,13 +6,15 @@ Handles user account management, authentication, and OAuth
 from fastapi import APIRouter, HTTPException, Depends, status
 from uuid import UUID, uuid4
 from datetime import datetime, timezone, timedelta
+import logging
 from app.models.schemas import (
     UserRegister,
     UserLogin,
     OAuthLogin,
     UserResponse,
     UserUpdate,
-    Token
+    Token,
+    DashboardStatsResponse
 )
 from app.core.singleton import DatabaseManager
 from app.core.auth import (
@@ -26,6 +28,7 @@ from app.services.oauth_service import OAuthService
 from app.patterns.observer import user_event_subject, EventType
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -395,5 +398,95 @@ async def get_user(user_id: UUID):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get user: {str(e)}"
+        )
+
+
+@router.get("/dashboard/stats", response_model=DashboardStatsResponse)
+async def get_dashboard_stats(current_user_id: UUID = Depends(get_current_user_id)):
+    """
+    Get dashboard statistics for the current user
+    """
+    try:
+        db_manager = DatabaseManager.get_instance()
+        supabase = db_manager.get_connection()
+
+        # Get current week start and previous week start
+        now = datetime.now(timezone.utc)
+        week_start = now - timedelta(days=now.weekday())  # Monday of current week
+        prev_week_start = week_start - timedelta(days=7)  # Monday of previous week
+
+        # Get user's credits
+        user_response = supabase.table("users").select("credits").eq("user_id", str(current_user_id)).execute()
+        credits_remaining = user_response.data[0]["credits"] if user_response.data else 0
+
+        # Get job bookmark statistics
+        bookmarks_response = supabase.table("job_bookmarks").select("application_status, created_at").eq("user_id", str(current_user_id)).execute()
+
+        # Count by status
+        total_bookmarks = len(bookmarks_response.data) if bookmarks_response.data else 0
+        in_interview = sum(1 for b in (bookmarks_response.data or []) if b.get("application_status") == "interviewing")
+        failed_interview = sum(1 for b in (bookmarks_response.data or []) if b.get("application_status") == "interviewed_failed")
+        potential_jobs = sum(1 for b in (bookmarks_response.data or []) if b.get("application_status") == "interested")
+
+        # Calculate weekly changes
+        def parse_created_at(created_at_str: str) -> datetime:
+            """Parse created_at string and make it offset-aware"""
+            if created_at_str.endswith("Z"):
+                created_at_str = created_at_str[:-1] + "+00:00"
+            dt = datetime.fromisoformat(created_at_str)
+            # Make sure it's offset-aware
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt
+
+        current_week_bookmarks = sum(1 for b in (bookmarks_response.data or [])
+                                   if b.get("created_at") and
+                                   parse_created_at(b["created_at"]) >= week_start)
+        prev_week_bookmarks = sum(1 for b in (bookmarks_response.data or [])
+                                if b.get("created_at") and
+                                prev_week_start <= parse_created_at(b["created_at"]) < week_start)
+
+        current_week_interview = sum(1 for b in (bookmarks_response.data or [])
+                                   if b.get("application_status") == "interviewing" and
+                                   b.get("created_at") and
+                                   parse_created_at(b["created_at"]) >= week_start)
+
+        prev_week_interview = sum(1 for b in (bookmarks_response.data or [])
+                                if b.get("application_status") == "interviewing" and
+                                b.get("created_at") and
+                                prev_week_start <= parse_created_at(b["created_at"]) < week_start)
+
+        # Calculate percentage changes
+        def calculate_percentage_change(current, previous):
+            if previous == 0:
+                return current * 100 if current > 0 else 0
+            return ((current - previous) / previous) * 100
+
+        job_bookmarks_change = calculate_percentage_change(current_week_bookmarks, prev_week_bookmarks)
+        in_interview_change = calculate_percentage_change(current_week_interview, prev_week_interview)
+
+        # For now, set avg_match_score and its change to None (will be implemented later)
+        avg_match_score = None
+        avg_match_score_change = None
+        potential_jobs_change = None  # This would need more complex logic to track changes
+
+        return DashboardStatsResponse(
+            job_bookmarks=total_bookmarks,
+            in_interview=in_interview,
+            failed_interview=failed_interview,
+            avg_match_score=avg_match_score,
+            credits_remaining=credits_remaining,
+            potential_jobs=potential_jobs,
+            job_bookmarks_change=round(job_bookmarks_change, 1) if job_bookmarks_change != 0 else None,
+            in_interview_change=round(in_interview_change, 1) if in_interview_change != 0 else None,
+            avg_match_score_change=avg_match_score_change,
+            potential_jobs_change=potential_jobs_change
+        )
+
+    except Exception as e:
+        logger.error(f"Failed to get dashboard stats for user {current_user_id}: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get dashboard statistics: {str(e)}"
         )
 

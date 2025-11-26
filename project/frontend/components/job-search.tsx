@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { JobForm, type JobFormData } from "@/components/job-form"
-import { searchJobByUrl, type JobUrlSearchResponse } from "@/lib/api/client"
+import { searchJobByUrl, submitManualJob, uploadJobDocument, type JobUrlSearchResponse } from "@/lib/api/client"
 import { JobSearchResults } from "@/components/job-search-results"
 
 export function JobSearch() {
@@ -65,16 +65,108 @@ export function JobSearch() {
   }
 
   const handleManualSubmit = async (data: JobFormData) => {
-    // TODO: Implement manual job input
-    console.log("Submitting manual job:", data)
+    setError(null)
+    setSearchResult(null)
+
+    setIsLoading(true)
+    setLoadingMessage("Analyzing job authenticity...")
+
+    try {
+      // Map JobFormData to API format
+      const apiData = {
+        job_title: data.jobTitle,
+        company: data.company,
+        location: data.location,
+        industry: data.industry,
+        source: data.source,
+        description: data.jobDescription
+      }
+
+      const result = await submitManualJob(apiData)
+
+      setLoadingMessage("Processing results...")
+      // Small delay to show the loading message
+      await new Promise((resolve) => setTimeout(resolve, 500))
+
+      setSearchResult(result)
+      // Only clear form on successful analysis display
+      // This will be handled by the form's reset function when results are shown
+    } catch (err) {
+      let errorMessage = "Failed to submit job. Please try again."
+
+      // Provide more educational error messages
+      if (err instanceof Error) {
+        if (err.message.includes("Insufficient credits")) {
+          errorMessage = "You don't have enough credits to analyze this job. Please purchase more credits to continue."
+        } else if (err.message.includes("Invalid")) {
+          errorMessage = "There was an issue with your job details. Please check all required fields and try again."
+        } else if (err.message.includes("network") || err.message.includes("fetch")) {
+          errorMessage = "Network error occurred. Please check your connection and try again."
+        } else {
+          errorMessage = err.message
+        }
+      }
+
+      setError(errorMessage)
+      // Don't reset form on error - keep values so user can fix them
+    } finally {
+      setIsLoading(false)
+      setLoadingMessage("")
+    }
+  }
+
+  const validateFile = (file: File): string | null => {
+    const maxSize = 20 * 1024 * 1024 // 20MB
+    const allowedTypes = [
+      'application/pdf',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/msword',
+      'text/plain'
+    ]
+
+    if (file.size > maxSize) {
+      return 'File size must be less than 20MB'
+    }
+
+    if (!allowedTypes.includes(file.type)) {
+      return 'Only PDF, DOC, DOCX, and TXT files are supported'
+    }
+
+    return null
   }
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0]
     if (selectedFile) {
-      setFile(selectedFile)
-      // TODO: Implement file upload
-      console.log("Uploading file:", selectedFile.name)
+      const error = validateFile(selectedFile)
+      if (error) {
+        setError(error)
+        setFile(null)
+      } else {
+        setFile(selectedFile)
+        setError(null)
+      }
+    }
+  }
+
+  const processDocument = async () => {
+    if (!file) return
+
+    setIsLoading(true)
+    setLoadingMessage("Analyzing document...")
+    setError(null)
+    setSearchResult(null)
+
+    try {
+      const result = await uploadJobDocument(file)
+      setSearchResult(result)
+      setFile(null) // Clear file after successful processing
+
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Document processing failed')
+    } finally {
+      setIsLoading(false)
+      setLoadingMessage("")
     }
   }
 
@@ -86,25 +178,25 @@ export function JobSearch() {
           Search for jobs by URL, manually input job details, or upload a job posting
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="space-y-6">
         <Tabs defaultValue="url" className="w-full">
           <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger 
-              value="url" 
+            <TabsTrigger
+              value="url"
               className="bg-bg-primary data-[state=active]:bg-primary-400 dark:data-[state=active]:bg-primary-400 data-[state=active]:text-white dark:data-[state=active]:text-white"
             >
               <LinkIcon className="mr-2 h-4 w-4" />
               By URL
             </TabsTrigger>
-            <TabsTrigger 
-              value="manual" 
+            <TabsTrigger
+              value="manual"
               className="bg-bg-primary data-[state=active]:bg-primary-400 dark:data-[state=active]:bg-primary-400 data-[state=active]:text-white dark:data-[state=active]:text-white"
             >
               <FileText className="mr-2 h-4 w-4" />
               Manual Input
             </TabsTrigger>
-            <TabsTrigger 
-              value="upload" 
+            <TabsTrigger
+              value="upload"
               className="bg-bg-primary data-[state=active]:bg-primary-400 dark:data-[state=active]:bg-primary-400 data-[state=active]:text-white dark:data-[state=active]:text-white"
             >
               <Upload className="mr-2 h-4 w-4" />
@@ -140,28 +232,24 @@ export function JobSearch() {
                 )}
               </Button>
             </form>
-            
+
             {isLoading && loadingMessage && (
               <div className="flex items-center gap-2 text-sm text-text-secondary dark:text-[#b0b3b8]">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 <span>{loadingMessage}</span>
               </div>
             )}
-            
-            {error && (
-              <div className="flex items-start gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-                <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                <span>{error}</span>
-              </div>
-            )}
-            
-            {searchResult && (
-              <JobSearchResults result={searchResult} />
-            )}
           </TabsContent>
 
           <TabsContent value="manual" className="mt-4">
-            <JobForm onSubmit={handleManualSubmit} />
+            <JobForm onSubmit={handleManualSubmit} isSubmitting={isLoading} />
+
+            {isLoading && loadingMessage && (
+              <div className="flex items-center gap-2 text-sm text-text-secondary dark:text-[#b0b3b8] mt-4">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>{loadingMessage}</span>
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="upload" className="mt-4">
@@ -189,7 +277,7 @@ export function JobSearch() {
                     />
                   </div>
                   <p className="mt-2 text-xs text-muted-foreground">
-                    PDF, DOC, DOCX, or TXT (MAX. 10MB)
+                    PDF, DOC, DOCX, or TXT (MAX. 20MB)
                   </p>
                   {file && (
                     <p className="mt-2 text-sm text-text-primary dark:text-[#e4e6eb]">
@@ -199,44 +287,48 @@ export function JobSearch() {
                 </div>
               </div>
               {file && (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                   <Button
-                    className="bg-primary-600 dark:bg-primary-400 hover:bg-primary-700 dark:hover:bg-primary-500 text-white"
-                    onClick={() => {
-                      // TODO: Implement process file
-                      console.log("Processing file:", file.name)
-                    }}
+                    className="w-full bg-primary-600 dark:bg-primary-400 hover:bg-primary-700 dark:hover:bg-primary-500 text-white"
+                    onClick={processDocument}
+                    disabled={!file || isLoading}
                   >
-                    <Sparkles className="mr-2 h-4 w-4" />
-                    Process
+                    {isLoading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Analyzing...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="mr-2 h-4 w-4" />
+                        Process and bookmark
+                      </>
+                    )}
                   </Button>
-                  <Button
-                    variant="secondary"
-                    className="bg-secondary-600 dark:bg-secondary-400 hover:bg-secondary-600/80 dark:hover:bg-secondary-400/80 text-white"
-                    onClick={() => {
-                      // TODO: Implement bookmark file
-                      console.log("Bookmarking file:", file.name)
-                    }}
-                  >
-                    <Bookmark className="mr-2 h-4 w-4" />
-                    Bookmark
-                  </Button>
-                  <Button
-                    className="bg-accent-warning dark:bg-[#d9c760] hover:bg-accent-warning/90 dark:hover:bg-[#d9c760]/90 text-[#172B4D] dark:text-[#1a1d23]"
-                    onClick={() => {
-                      // TODO: Implement bookmark and process file
-                      console.log("Bookmarking and processing file:", file.name)
-                    }}
-                  >
-                    <Sparkles className="mr-2 h-4 w-4" />
-                    <Bookmark className="mr-2 h-4 w-4" />
-                    Bookmark & Process
-                  </Button>
-                </div>
+                  
               )}
             </div>
           </TabsContent>
         </Tabs>
+
+        {/* Shared Results and Error Display */}
+        <div className="space-y-4">
+          {error && (
+            <div className="flex items-start gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
+              <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+              <span>{error}</span>
+            </div>
+          )}
+
+          {searchResult && (
+            <JobSearchResults
+              result={searchResult}
+              onAcknowledge={() => {
+                setSearchResult(null)
+                setError(null)
+              }}
+            />
+          )}
+        </div>
       </CardContent>
     </Card>
   )

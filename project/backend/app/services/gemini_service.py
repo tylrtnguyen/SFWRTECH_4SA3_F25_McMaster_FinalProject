@@ -176,20 +176,43 @@ class GeminiService:
         
         prompt = f"""You are an expert job authenticity analyst. Analyze the following job posting and determine if it is a REAL job or a FAKE/scam job posting.
 
+Additionally, extract the company name, location, and industry from the job description even if not explicitly provided.
+
 Job Title: {job_title}
 Company: {company}
 {location_text}
 Job Description:
 {description}
 
-Please analyze this job posting and provide your assessment in the following JSON format:
+## Few-Shot Examples for Data Extraction:
+
+**Example 1:**
+Description: "We're building for employer SMBs and their finance function, internal and external, and are focused on delivering a human-centric customer experience. Relay is the all-in-one, collaborative money management platform."
+Extracted: company="Relay", industry="Finance/FinTech", location=null (not mentioned)
+
+**Example 2:**
+Description: "Join our team at Amazon Web Services in Seattle. We're looking for cloud engineers to build next-generation infrastructure."
+Extracted: company="Amazon Web Services", industry="Cloud Computing/Technology", location="Seattle"
+
+**Example 3:**
+Description: "Tactable is a world-class cloud, data, and API engineering firm. Work from our downtown Toronto HQ in a hybrid environment."
+Extracted: company="Tactable", industry="Software Engineering/Consulting", location="Toronto, ON"
+
+## Your Task:
+
+Analyze this job posting and provide your assessment in the following JSON format:
 {{
     "is_authentic": true or false,
     "confidence_score": a number between 0 and 100,
-    "evidence": "Your detailed reasoning explaining why you believe this job is real or fake. Include specific indicators, red flags, or positive signals you found."
+    "evidence": "Your detailed reasoning explaining why you believe this job is real or fake. Include specific indicators, red flags, or positive signals you found. Use markdown formatting with headers, bullet points, and bold text for readability.",
+    "extracted_data": {{
+        "company": "The company name extracted or confirmed from the description",
+        "location": "City, State/Province extracted from description (null if not found)",
+        "industry": "Industry/sector extracted from description (null if not determinable)"
+    }}
 }}
 
-Consider the following factors:
+Consider the following factors for authenticity:
 1. Job description quality and detail
 2. Company information and legitimacy
 3. Job requirements and expectations
@@ -197,7 +220,10 @@ Consider the following factors:
 5. Red flags (e.g., requests for payment, vague descriptions, suspicious contact methods)
 6. Positive indicators (e.g., detailed requirements, professional language, clear company information)
 
-Provide your analysis in valid JSON format only, no additional text."""
+IMPORTANT: 
+- The "evidence" field should use markdown formatting (bold, lists, headers) for better readability.
+- Always try to extract company, location, and industry from the description context.
+- Provide your analysis in valid JSON format only, no additional text."""
 
         return prompt
     
@@ -209,23 +235,35 @@ Provide your analysis in valid JSON format only, no additional text."""
             response_text: Raw text response from Gemini
             
         Returns:
-            Dict with is_authentic, confidence_score, evidence
+            Dict with is_authentic, confidence_score, evidence, extracted_data
         """
+        # Default extracted_data structure
+        default_extracted_data = {
+            "company": None,
+            "location": None,
+            "industry": None
+        }
+        
         try:
             # Try to extract JSON from the response
             # Gemini might return JSON wrapped in markdown code blocks or plain text
             
-            # Remove markdown code blocks if present
-            json_text = re.sub(r'```json\s*', '', response_text)
-            json_text = re.sub(r'```\s*', '', json_text)
+            # Remove markdown code blocks if present (handle various formats)
+            json_text = response_text.strip()
+            
+            # Remove ```json or ``` at the start
+            if json_text.startswith('```json'):
+                json_text = json_text[7:]
+            elif json_text.startswith('```'):
+                json_text = json_text[3:]
+            
+            # Remove ``` at the end
+            if json_text.endswith('```'):
+                json_text = json_text[:-3]
+            
             json_text = json_text.strip()
             
-            # Try to find JSON object in the text
-            json_match = re.search(r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}', json_text, re.DOTALL)
-            if json_match:
-                json_text = json_match.group(0)
-            
-            # Parse JSON
+            # Parse JSON directly - json.loads handles nested objects and escaped strings properly
             data = json.loads(json_text)
             
             # Extract and validate fields
@@ -233,21 +271,40 @@ Provide your analysis in valid JSON format only, no additional text."""
             confidence_score = float(data.get("confidence_score", 0.0))
             evidence = str(data.get("evidence", "No evidence provided"))
             
+            # Extract the new extracted_data fields
+            extracted_data = data.get("extracted_data", {})
+            if not isinstance(extracted_data, dict):
+                extracted_data = default_extracted_data
+            else:
+                # Ensure all fields exist and handle null values properly
+                extracted_data = {
+                    "company": extracted_data.get("company") if extracted_data.get("company") not in [None, "null", ""] else None,
+                    "location": extracted_data.get("location") if extracted_data.get("location") not in [None, "null", ""] else None,
+                    "industry": extracted_data.get("industry") if extracted_data.get("industry") not in [None, "null", ""] else None
+                }
+            
             # Ensure confidence_score is between 0 and 100
             confidence_score = max(0.0, min(100.0, confidence_score))
+            
+            logger.info(f"Successfully parsed Gemini response: is_authentic={is_authentic}, confidence={confidence_score}")
             
             return {
                 "is_authentic": is_authentic,
                 "confidence_score": confidence_score,
-                "evidence": evidence
+                "evidence": evidence,
+                "extracted_data": extracted_data
             }
             
         except (json.JSONDecodeError, KeyError, ValueError) as e:
+            logger.warning(f"Failed to parse Gemini response as JSON: {str(e)}")
+            logger.debug(f"Raw response (first 500 chars): {response_text[:500]}")
+            
             # If parsing fails, try to extract information using regex
             # Fallback parsing
             is_authentic = False
             confidence_score = 50.0
-            evidence = response_text
+            evidence = "Analysis completed but response parsing failed. Please try again."
+            extracted_data = default_extracted_data
             
             # Try to find is_authentic in text
             authentic_match = re.search(r'"is_authentic"\s*:\s*(true|false)', response_text, re.IGNORECASE)
@@ -263,9 +320,35 @@ Provide your analysis in valid JSON format only, no additional text."""
                 except ValueError:
                     pass
             
+            # Try to extract evidence field using regex - it's a long string with escaped characters
+            # Match "evidence": "..." where the content can span multiple lines and contain escaped chars
+            evidence_match = re.search(r'"evidence"\s*:\s*"((?:[^"\\]|\\.)*)"', response_text, re.DOTALL)
+            if evidence_match:
+                # Decode escaped characters in the evidence string
+                try:
+                    evidence = evidence_match.group(1).encode().decode('unicode_escape')
+                except Exception:
+                    evidence = evidence_match.group(1).replace('\\n', '\n').replace('\\"', '"')
+            
+            # Try to extract extracted_data fields using regex
+            company_match = re.search(r'"company"\s*:\s*"([^"]+)"', response_text)
+            if company_match:
+                extracted_data["company"] = company_match.group(1)
+            
+            location_match = re.search(r'"location"\s*:\s*"([^"]+)"', response_text)
+            if location_match:
+                extracted_data["location"] = location_match.group(1)
+            
+            industry_match = re.search(r'"industry"\s*:\s*"([^"]+)"', response_text)
+            if industry_match:
+                extracted_data["industry"] = industry_match.group(1)
+            
+            logger.info(f"Fallback parsing result: is_authentic={is_authentic}, confidence={confidence_score}")
+            
             return {
                 "is_authentic": is_authentic,
                 "confidence_score": confidence_score,
-                "evidence": evidence
+                "evidence": evidence,
+                "extracted_data": extracted_data
             }
 

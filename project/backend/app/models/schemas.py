@@ -8,7 +8,18 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime, date, timezone
 from decimal import Decimal
 from uuid import UUID
+from enum import Enum
 import re
+
+
+# Enums
+class ApplicationStatus(str, Enum):
+    """Application status for job bookmarks"""
+    INTERESTED = "interested"
+    APPLIED = "applied"
+    INTERVIEWING = "interviewing"
+    INTERVIEWED_PASSED = "interviewed_passed"
+    INTERVIEWED_FAILED = "interviewed_failed"
 
 
 # User Models
@@ -209,17 +220,25 @@ class JobAnalysis(JobAnalysisBase):
         from_attributes = True
 
 
+class ExtractedJobData(BaseModel):
+    """Extracted job data from Gemini analysis"""
+    company: Optional[str] = Field(None, description="Company name extracted from description")
+    location: Optional[str] = Field(None, description="Location extracted from description")
+    industry: Optional[str] = Field(None, description="Industry extracted from description")
+
+
 class JobAnalysisResponse(BaseModel):
     """Job analysis response model"""
     analysis_id: UUID
     user_id: UUID
-    job_bookmark_id: UUID
+    job_bookmark_id: Optional[UUID] = Field(None, description="Job bookmark ID (null if job not bookmarked)")
     confidence_score: Optional[Decimal]
     is_authentic: Optional[bool]
     evidence: Optional[str]
     analysis_type: str
     credits_used: int
     created_at: datetime
+    extracted_data: Optional[ExtractedJobData] = Field(None, description="Data extracted by Gemini from job description")
 
 
 # Job Match Models
@@ -271,6 +290,28 @@ class JobMatchResponse(BaseModel):
     created_at: datetime
 
 
+# Job Industry Models
+class JobIndustryBase(BaseModel):
+    """Base job industry model"""
+    description: str = Field(..., max_length=255, description="Industry description")
+
+
+class JobIndustry(JobIndustryBase):
+    """Job industry model matching database schema"""
+    id: int = Field(..., description="Unique industry identifier")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Record creation timestamp")
+
+    class Config:
+        from_attributes = True
+
+
+class JobIndustryResponse(BaseModel):
+    """Job industry response model"""
+    id: int
+    description: str
+    created_at: datetime
+
+
 # Job Bookmark Models
 class JobBookmarkBase(BaseModel):
     """Base job bookmark model"""
@@ -281,6 +322,8 @@ class JobBookmarkBase(BaseModel):
     source: str = Field(..., max_length=100, description="Source (e.g., linkedin, indeed, manual)")
     source_url: Optional[str] = Field(None, max_length=1000, description="Original job posting URL")
     description: Optional[str] = Field(None, max_length=5000, description="Job description")
+    application_status: ApplicationStatus = Field(default=ApplicationStatus.INTERESTED, description="Current application status")
+    job_industry_id: Optional[int] = Field(None, description="Reference to job_industry.id")
 
 
 class JobBookmarkCreate(JobBookmarkBase):
@@ -307,7 +350,15 @@ class JobBookmarkResponse(BaseModel):
     source: str
     source_url: Optional[str]
     description: Optional[str]
+    application_status: ApplicationStatus = Field(default=ApplicationStatus.INTERESTED)
+    job_industry_id: Optional[int] = Field(None, description="Reference to job_industry.id")
     created_at: datetime
+
+    # Analysis data (optional, populated when joined with job_analyses)
+    is_authentic: Optional[bool] = Field(None, description="Whether the job is authentic based on analysis")
+    confidence_score: Optional[float] = Field(None, description="Confidence score of the analysis")
+    analysis_evidence: Optional[str] = Field(None, description="Analysis evidence/reasoning")
+    analysis_type: Optional[str] = Field(None, description="Type of analysis performed")
 
 
 # Log Models
@@ -354,13 +405,25 @@ class JobAnalysisRequest(BaseModel):
 
 class JobUrlSearchRequest(BaseModel):
     """Request for job search by URL"""
-    url: str = Field(..., description="Job posting URL (LinkedIn)")
+    url: str = Field(..., description="Job posting URL (LinkedIn or Indeed)")
+
+
+class JobManualSubmitRequest(BaseModel):
+    """Request for manual job submission"""
+    job_title: str = Field(..., description="Job title")
+    company: str = Field(..., description="Company name")
+    location: Optional[str] = Field(None, description="Job location")
+    industry: Optional[str] = Field(None, description="Industry")
+    source: Optional[str] = Field(None, description="Job source")
+    description: str = Field(..., description="Job description")
 
 
 class JobUrlSearchResponse(BaseModel):
     """Response for job search by URL"""
-    bookmark_id: UUID
-    job_data: JobBookmarkResponse
+    bookmarked: bool = Field(..., description="Whether the job was bookmarked (only true for genuine jobs)")
+    already_bookmarked: bool = Field(default=False, description="Whether the job was already bookmarked previously")
+    bookmark_id: Optional[UUID] = Field(None, description="Bookmark ID if job was bookmarked")
+    job_data: Optional[JobBookmarkResponse] = Field(None, description="Job bookmark data if bookmarked")
     analysis: JobAnalysisResponse
 
 
@@ -473,3 +536,18 @@ class ResumeResponse(BaseModel):
     user_id: UUID
     last_match_job_bookmark_id: Optional[UUID]
     recommended_tips: Optional[str]
+
+class DashboardStatsResponse(BaseModel):
+    """Dashboard statistics response model"""
+    job_bookmarks: int = Field(description="Total number of job bookmarks")
+    in_interview: int = Field(description="Jobs currently in interview process")
+    failed_interview: int = Field(description="Jobs where interview failed")
+    avg_match_score: Optional[float] = Field(None, description="Average match score of active resume")
+    credits_remaining: int = Field(description="Remaining user credits")
+    potential_jobs: int = Field(description="Jobs in 'interested' status")
+
+    # Weekly change percentages
+    job_bookmarks_change: Optional[float] = Field(None, description="Percentage change in job bookmarks this week")
+    in_interview_change: Optional[float] = Field(None, description="Percentage change in interview count this week")
+    avg_match_score_change: Optional[float] = Field(None, description="Percentage change in match score this week")
+    potential_jobs_change: Optional[float] = Field(None, description="Percentage change in potential jobs this week")

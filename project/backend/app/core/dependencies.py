@@ -56,7 +56,7 @@ async def get_current_user_id(
     except Exception as e:
         logger.error(f"Exception during Supabase token decode: {str(e)}", exc_info=True)
         supabase_payload = None
-    
+
     if supabase_payload:
         user_id_str = supabase_payload.get("sub")
         if not user_id_str:
@@ -69,10 +69,10 @@ async def get_current_user_id(
                 try:
                     db_manager = DatabaseManager.get_instance()
                     supabase = db_manager.get_connection()
-                    
+
                     # Execute query and check for errors
                     user_response = supabase.table("users").select("user_id").eq("user_id", str(user_id)).execute()
-                    
+
                     # Check if Supabase returned an error
                     if hasattr(user_response, 'error') and user_response.error:
                         logger.error(f"Supabase query error: {user_response.error}")
@@ -81,7 +81,7 @@ async def get_current_user_id(
                             detail=f"Database query failed: {str(user_response.error)}",
                             headers={"WWW-Authenticate": "Bearer"},
                         )
-                    
+
                     # Check if user exists
                     if user_response.data and len(user_response.data) > 0:
                         logger.debug(f"Successfully authenticated user: {user_id}")

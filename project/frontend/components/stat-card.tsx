@@ -10,6 +10,7 @@ interface StatCardProps {
   trend?: {
     value: string
     isPositive: boolean
+    isPercentage?: boolean
   }
   className?: string
 }
@@ -26,7 +27,7 @@ export function StatCard({
     <Card className={cn("hover:shadow-md transition-shadow", className)}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium text-text-primary dark:text-[#e4e6eb]">{title}</CardTitle>
-        <Icon className="h-4 w-4 text-text-tertiary dark:text-[#8a8d91]" />
+        <Icon className="h-6 w-6 text-text-tertiary dark:text-[#8a8d91]" />
       </CardHeader>
       <CardContent>
         <div className="text-2xl font-bold text-text-primary dark:text-[#e4e6eb]">{value}</div>
@@ -36,13 +37,13 @@ export function StatCard({
         {trend && (
           <p
             className={cn(
-              "text-xs mt-1",
-              trend.isPositive 
-                ? "text-success" 
-                : "text-destructive"
+              "text-sm font-medium mt-2 px-2 py-1 rounded-md inline-flex items-center gap-1",
+              trend.isPositive
+                ? "text-green-700 bg-green-100 dark:text-green-300 dark:bg-green-900/30"
+                : "text-red-700 bg-red-100 dark:text-red-300 dark:bg-red-900/30"
             )}
           >
-            {trend.isPositive ? "↑" : "↓"} {trend.value}
+            {trend.isPositive ? "↗" : "↘"} {trend.isPercentage ? `${trend.value}%` : trend.value} this week
           </p>
         )}
       </CardContent>

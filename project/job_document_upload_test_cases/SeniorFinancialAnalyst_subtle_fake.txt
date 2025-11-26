@@ -1,0 +1,92 @@
+# Senior Financial Analyst – Agitated Passbook
+
+**Company:** Agitated Passbook Inc.  
+**Website:** https://agitated-passbook.name  
+**Location:** Toronto, ON (Remote-first, hybrid optional)  
+**Employment Type:** Full-time  
+**Salary:** $65,000 - $85,000 CAD annually
+
+---
+
+## About Agitated Passbook
+
+Agitated Passbook is a rapidly growing fintech startup specializing in payment processing solutions and digital wallet services. Founded in 2019, we serve mid-market businesses across North America with innovative tools for transaction management, fraud detection, and customer analytics.
+
+Our team of 45+ professionals is committed to building secure, scalable financial infrastructure that empowers businesses to grow confidently.
+
+---
+
+## The Role
+
+We're seeking a detail-oriented Senior Financial Analyst to join our Finance & Operations team. You'll play a critical role in financial forecasting, client billing reconciliation, and payment flow analysis. This is an excellent opportunity to contribute to a fast-growing company while developing expertise in fintech operations.
+
+### Key Responsibilities
+
+- Analyze transaction data and reconcile client accounts monthly; identify and resolve discrepancies.
+- Build financial models and forecasts for revenue projections and budget planning.
+- Prepare detailed reports on payment processing metrics, chargeback trends, and customer profitability.
+- Collaborate with Product and Engineering teams to validate billing logic and optimize commission structures.
+- Communicate findings to leadership and clients via presentations and documentation.
+- Assist with ad-hoc financial analysis and special projects as priorities shift.
+
+### Required Qualifications
+
+- 3+ years of experience in financial analysis, accounting, or fintech operations.
+- Proficiency in Excel, SQL, or Python for data manipulation and reporting.
+- Strong understanding of payment processing, banking, or SaaS business models (or willingness to learn quickly).
+- Excellent written and verbal communication skills.
+- Bachelor's degree in Finance, Accounting, Business, or related field (or equivalent experience).
+- Comfort working in a fast-paced, evolving environment with changing priorities.
+
+### Nice to Have
+
+- Experience with payment processors (Stripe, Square, PayPal) or banking APIs.
+- Familiarity with visualization tools (Tableau, Power BI).
+- Background in fraud detection or risk analysis.
+
+---
+
+## Why Join Agitated Passbook?
+
+- **Equity & Growth:** Early-stage company offering competitive base salary plus stock options.
+- **Learning Culture:** Access to professional development budget and mentorship from experienced leaders.
+- **Flexibility:** Remote-first with option to work from our Toronto office when needed.
+- **Impact:** Work directly with leadership on strategic decisions; your analysis directly shapes company direction.
+- **Benefits:** Comprehensive health coverage, RRSP matching, and unlimited PTO.
+
+---
+
+## How to Apply
+
+Send your resume, a brief cover letter, and a sample of your analytical work (e.g., spreadsheet, report, or portfolio link) to **careers@agitated-passbook.name** with the subject line "Senior Financial Analyst – Application."
+
+**Review timeline:** Applications reviewed on a rolling basis. Selected candidates will be contacted within 1–2 weeks.
+
+---
+
+## Red Flags for Testing (Educational Markers)
+
+This posting contains subtle indicators that **JobTrust should flag for verification:**
+
+- Vague founding year (2019) without verifiable public records or press coverage.
+- No specific client names, partnerships, or case studies despite claims of serving "mid-market businesses."
+- Salary range is wide ($20K spread) without clear justification based on experience level.
+- "Unlimited PTO" is mentioned casually without clarity on how it's tracked or enforced (common in scams that promise flexibility but don't deliver).
+- Generic company website URL with no SSL certificate verification or domain WHOIS details provided.
+- No LinkedIn company page, Glassdoor reviews, or public job history mentioned.
+- Vague requirement: "willingness to learn quickly" can mask inadequate onboarding or unclear expectations.
+- Email contact is a generic "careers@" address with no named hiring manager or recruiter.
+- No mention of background check, reference checks, or standard hiring process steps.
+- "Fast-paced, evolving environment" is a common euphemism for poor process or job instability in scam postings.
+- Stock options mentioned without vesting schedule, strike price, or cap table transparency details.
+
+---
+
+## Disclaimer
+
+**This job posting is entirely fictional and created for software testing purposes only.** It is not a real job opportunity. It combines elements of legitimate postings with subtle red flags designed to test fraud-detection logic in JobTrust. Do not apply or share this posting as if it were real.
+
+Use this as a training dataset to help your system distinguish between:
+1. Obviously malicious postings (see the "Remote Data Compliance Assistant" example)
+2. Plausible but suspicious postings (this one)
+3. Legitimate postings with verifiable company details and transparent processes

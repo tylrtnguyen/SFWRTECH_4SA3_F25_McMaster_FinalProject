@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
-import { Plus, X } from "lucide-react"
+import { Plus, X, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -42,15 +42,30 @@ export type JobFormData = z.infer<typeof jobFormSchema>
 
 interface JobFormProps {
   onSubmit: (data: JobFormData) => void | Promise<void>
+  isSubmitting?: boolean
 }
 
-export function JobForm({ onSubmit }: JobFormProps) {
+export function JobForm({ onSubmit, isSubmitting: externalIsSubmitting = false }: JobFormProps) {
   const [industries, setIndustries] = useState<string[]>([])
   const [showCustomIndustry, setShowCustomIndustry] = useState(false)
   const [customIndustry, setCustomIndustry] = useState("")
+  const [loadingIndustries, setLoadingIndustries] = useState(true)
 
   useEffect(() => {
-    setIndustries(getIndustries())
+    const loadIndustries = async () => {
+      try {
+        const industryList = await getIndustries()
+        setIndustries(industryList)
+      } catch (error) {
+        console.error("Failed to load industries:", error)
+        // Set basic fallback
+        setIndustries(["Technology", "Healthcare", "Finance", "Education", "Other"])
+      } finally {
+        setLoadingIndustries(false)
+      }
+    }
+
+    loadIndustries()
   }, [])
 
   const {
@@ -70,19 +85,34 @@ export function JobForm({ onSubmit }: JobFormProps) {
   const selectedIndustry = watch("industry")
   const isCustomIndustry = selectedIndustry === "__custom__"
 
-  const handleAddCustomIndustry = () => {
+  const handleAddCustomIndustry = async () => {
     if (customIndustry.trim()) {
-      addIndustry(customIndustry.trim())
-      setIndustries(getIndustries())
-      setValue("industry", customIndustry.trim(), { shouldValidate: true })
-      setCustomIndustry("")
-      setShowCustomIndustry(false)
+      try {
+        await addIndustry(customIndustry.trim())
+        // Refresh industries list
+        const updatedIndustries = await getIndustries()
+        setIndustries(updatedIndustries)
+        setValue("industry", customIndustry.trim(), { shouldValidate: true })
+        setCustomIndustry("")
+        setShowCustomIndustry(false)
+      } catch (error) {
+        console.error("Failed to add custom industry:", error)
+        // Still allow the user to select it even if API failed
+        const normalized = customIndustry.trim()
+        if (normalized && !industries.includes(normalized)) {
+          const updated = [...industries, normalized].sort()
+          setIndustries(updated)
+          setValue("industry", normalized, { shouldValidate: true })
+        }
+        setCustomIndustry("")
+        setShowCustomIndustry(false)
+      }
     }
   }
 
   const onFormSubmit = async (data: JobFormData) => {
     await onSubmit(data)
-    reset()
+    // Reset will be handled by parent component on success
   }
 
   return (
@@ -176,6 +206,7 @@ export function JobForm({ onSubmit }: JobFormProps) {
                   setShowCustomIndustry(false)
                 }
               }}
+              disabled={loadingIndustries || externalIsSubmitting}
             >
               <SelectTrigger
                 className={
@@ -184,7 +215,7 @@ export function JobForm({ onSubmit }: JobFormProps) {
                     : ""
                 }
               >
-                <SelectValue placeholder="Select industry" />
+                <SelectValue placeholder={loadingIndustries ? "Loading industries..." : "Select industry"} />
               </SelectTrigger>
               <SelectContent>
                 {industries.map((industry) => (
@@ -302,8 +333,15 @@ export function JobForm({ onSubmit }: JobFormProps) {
       </div>
 
       {/* Submit Button */}
-      <Button type="submit" className="w-full" disabled={isSubmitting}>
-        {isSubmitting ? "Saving..." : "Save Job"}
+      <Button type="submit" className="w-full" disabled={externalIsSubmitting}>
+        {externalIsSubmitting ? (
+          <>
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            Analyzing and Saving Job...
+          </>
+        ) : (
+          "Save Job"
+        )}
       </Button>
     </form>
   )
