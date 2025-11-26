@@ -5,6 +5,7 @@ import { useTheme } from "next-themes"
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { createClient } from "@/lib/supabase/client"
+import { useUser } from "@/lib/contexts/user-context"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -15,12 +16,66 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Badge } from "@/components/ui/badge"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
 export function Navbar() {
   const { theme, setTheme } = useTheme()
   const [mounted, setMounted] = useState(false)
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const { userData } = useUser()
   const router = useRouter()
   const supabase = createClient()
+
+  // Fake notifications data
+  const notifications = [
+    {
+      id: 1,
+      title: "Job Analysis Complete",
+      message: "Your job application for Senior Software Engineer at Google has been analyzed.",
+      time: "2 minutes ago",
+      type: "analysis",
+      unread: true,
+    },
+    {
+      id: 2,
+      title: "New Job Match Found",
+      message: "We found a new job that matches your resume: Product Manager at Meta.",
+      time: "1 hour ago",
+      type: "match",
+      unread: true,
+    },
+    {
+      id: 3,
+      title: "Credits Low",
+      message: "You have 2 credits remaining. Consider purchasing more credits.",
+      time: "3 hours ago",
+      type: "warning",
+      unread: false,
+    },
+    {
+      id: 4,
+      title: "Profile Updated",
+      message: "Your profile information has been successfully updated.",
+      time: "1 day ago",
+      type: "success",
+      unread: false,
+    },
+    {
+      id: 5,
+      title: "Weekly Summary",
+      message: "This week you applied to 3 jobs and received 2 interview callbacks.",
+      time: "2 days ago",
+      type: "summary",
+      unread: false,
+    },
+  ]
 
   useEffect(() => {
     setMounted(true)
@@ -51,9 +106,14 @@ export function Navbar() {
 
         <div className="flex items-center gap-2">
           {/* Notifications */}
-          <Button variant="ghost" size="icon" className="relative">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="relative"
+            onClick={() => setNotificationsOpen(true)}
+          >
             <Bell className="h-5 w-5" />
-            <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-accent" />
+            <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500" />
           </Button>
 
           {/* Theme Toggle */}
@@ -86,14 +146,19 @@ export function Navbar() {
             <DropdownMenuContent className="w-56" align="end" forceMount>
               <DropdownMenuLabel className="font-normal">
                 <div className="flex flex-col space-y-1">
-                  <p className="text-sm font-medium leading-none">User Name</p>
+                  <p className="text-sm font-medium leading-none">
+                    {userData?.firstName && userData?.lastName
+                      ? `${userData.firstName} ${userData.lastName}`
+                      : userData?.firstName || userData?.lastName || "User"
+                    }
+                  </p>
                   <p className="text-xs leading-none text-muted-foreground">
-                    user@example.com
+                    {userData?.email || "user@example.com"}
                   </p>
                 </div>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => router.push("/dashboard/profile")}>
                 <User className="mr-2 h-4 w-4" />
                 <span>Profile</span>
               </DropdownMenuItem>
@@ -106,6 +171,48 @@ export function Navbar() {
           </DropdownMenu>
         </div>
       </div>
+
+      {/* Notifications Modal */}
+      <Dialog open={notificationsOpen} onOpenChange={setNotificationsOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Notifications</DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="max-h-96">
+            <div className="space-y-4">
+              {notifications.map((notification) => (
+                <div
+                  key={notification.id}
+                  className={`p-3 rounded-lg border ${
+                    notification.unread
+                      ? "bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800"
+                      : "bg-background border-border"
+                  }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h4 className="text-sm font-medium">{notification.title}</h4>
+                        {notification.unread && (
+                          <Badge variant="secondary" className="text-xs px-1 py-0">
+                            New
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground mb-1">
+                        {notification.message}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {notification.time}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </header>
   )
 }

@@ -84,7 +84,7 @@ async def get_industries():
     supabase = db_manager.get_connection()
 
     try:
-        response = supabase.table("job_industry").select("*").order("description").execute()
+        response = supabase.table("job_industry").select("id,description,created_at").order("description").execute()
 
         industries = []
         for item in response.data:
@@ -131,6 +131,34 @@ async def add_industry(description: str):
         raise HTTPException(status_code=500, detail=f"Failed to add industry: {str(e)}")
 
 
+async def get_or_create_industry(description: str) -> Optional[int]:
+    """
+    Get existing industry ID or create new industry and return its ID
+    Returns None if description is empty or invalid
+    """
+    if not description or not description.strip():
+        return None
+
+    db_manager = DatabaseManager.get_instance()
+    supabase = db_manager.get_connection()
+
+    try:
+        # Check if industry already exists
+        existing = supabase.table("job_industry").select("id").eq("description", description.strip()).execute()
+        if existing.data and len(existing.data) > 0:
+            return existing.data[0]["id"]
+
+        # Create new industry
+        response = supabase.table("job_industry").insert({
+            "description": description.strip()
+        }).execute()
+
+        return response.data[0]["id"] if response.data else None
+    except Exception as e:
+        logger.warning(f"Could not get/create industry '{description}': {str(e)}")
+        return None
+
+
 @router.get("/bookmarks", response_model=List[JobBookmarkResponse])
 async def get_user_bookmarks(current_user_id: UUID = Depends(get_current_user_id)):
     """
@@ -142,7 +170,7 @@ async def get_user_bookmarks(current_user_id: UUID = Depends(get_current_user_id
 
         # Get bookmarks with analysis data using a join
         response = supabase.table("job_bookmarks").select("""
-            *,
+            bookmark_id,title,company,location,source,source_url,description,application_status,created_at,job_industry_id,
             job_industry(description),
             job_analyses(
                 analysis_id,
@@ -209,9 +237,16 @@ async def get_bookmark_detail(
 
         # Get bookmark with analysis data
         response = supabase.table("job_bookmarks").select("""
-            *,
+            bookmark_id,title,company,location,source,source_url,description,application_status,created_at,job_industry_id,
             job_industry(description),
-            job_analyses(*)
+            job_analyses(
+                analysis_id,
+                is_authentic,
+                confidence_score,
+                evidence,
+                analysis_type,
+                created_at
+            )
         """).eq("bookmark_id", str(bookmark_id)).eq("user_id", str(current_user_id)).execute()
 
         if not response.data:
@@ -478,7 +513,7 @@ async def search_job_by_url(
             url = "https://" + url
         
         # Step 2: Check if job is already bookmarked by this user
-        existing_bookmark = supabase.table("job_bookmarks").select("*").eq(
+        existing_bookmark = supabase.table("job_bookmarks").select("bookmark_id,title,company,location,source,source_url,description,application_status,created_at").eq(
             "user_id", str(user_id)
         ).eq("source_url", url).execute()
         
@@ -488,7 +523,7 @@ async def search_job_by_url(
             bookmark_id = UUID(bookmark_data["bookmark_id"])
             
             # Fetch the latest analysis for this bookmark
-            existing_analysis = supabase.table("job_analyses").select("*").eq(
+            existing_analysis = supabase.table("job_analyses").select("analysis_id,confidence_score,is_authentic,evidence,analysis_type,created_at").eq(
                 "job_bookmark_id", str(bookmark_id)
             ).order("created_at", desc=True).limit(1).execute()
             
@@ -587,15 +622,11 @@ async def search_job_by_url(
         if source_value not in ["linkedin", "indeed", "manual"]:
             source_value = "linkedin"
 
-        # Look up industry ID
+        # Get or create industry from Gemini extracted data
         industry_id = None
-        if request.industry:
-            try:
-                industry_response = supabase.table("job_industry").select("id").eq("description", request.industry.strip()).execute()
-                if industry_response.data and len(industry_response.data) > 0:
-                    industry_id = industry_response.data[0]["id"]
-            except Exception as e:
-                logger.warning(f"Could not find industry '{request.industry}': {str(e)}")
+        industry_name = extracted_data.get("industry")
+        if industry_name:
+            industry_id = await get_or_create_industry(industry_name)
         
         created_at = datetime.now(timezone.utc)
         bookmark_id = None
@@ -619,7 +650,8 @@ async def search_job_by_url(
                 "source": source_value,
                 "source_url": scraped_data["source_url"],
                 "description": scraped_data.get("description", "")[:5000],  # Truncate if too long
-                "application_status": "interested"
+                "application_status": "interested",
+                "job_industry_id": industry_id
             }
             
             supabase.table("job_bookmarks").insert(bookmark_insert).execute()
@@ -634,6 +666,7 @@ async def search_job_by_url(
                 source_url=scraped_data["source_url"],
                 description=scraped_data.get("description", ""),
                 application_status=ApplicationStatus.INTERESTED,
+                job_industry_id=industry_id,
                 created_at=created_at
             )
         
@@ -727,7 +760,7 @@ async def submit_manual_job(
 
 
         # Step 2: Check if job with same title/company already exists for this user
-        existing_bookmark = supabase.table("job_bookmarks").select("*").eq(
+        existing_bookmark = supabase.table("job_bookmarks").select("bookmark_id,title,company,location,source,source_url,description,application_status,created_at").eq(
             "user_id", str(user_id)
         ).eq("title", request.job_title).eq("company", request.company).execute()
 
@@ -738,7 +771,7 @@ async def submit_manual_job(
             bookmark_id = UUID(bookmark_data["bookmark_id"])
 
             # Fetch the latest analysis for this bookmark
-            existing_analysis = supabase.table("job_analyses").select("*").eq(
+            existing_analysis = supabase.table("job_analyses").select("analysis_id,confidence_score,is_authentic,evidence,analysis_type,created_at").eq(
                 "job_bookmark_id", str(bookmark_id)
             ).order("created_at", desc=True).limit(1).execute()
 
@@ -1030,15 +1063,10 @@ async def upload_job_document(
                 "application_status": "interested"
             }
 
-            # Look up industry ID if available
+            # Get or create industry if available
             industry_name = extracted_data.get("industry")
             if industry_name:
-                try:
-                    industry_response = supabase.table("job_industry").select("id").eq("description", industry_name.strip()).execute()
-                    if industry_response.data and len(industry_response.data) > 0:
-                        bookmark_data["job_industry_id"] = industry_response.data[0]["id"]
-                except Exception as e:
-                    logger.warning(f"Could not find industry '{industry_name}': {str(e)}")
+                bookmark_data["job_industry_id"] = await get_or_create_industry(industry_name)
 
             bookmark_result = supabase.table("job_bookmarks").insert(bookmark_data).execute()
             if bookmark_result.data:

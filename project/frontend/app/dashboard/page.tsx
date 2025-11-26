@@ -5,6 +5,7 @@ import { Bookmark, Briefcase, XCircle, FileText, Coins, TrendingUp } from "lucid
 import { StatCard } from "@/components/stat-card"
 import { JobSearch } from "@/components/job-search"
 import { getDashboardStats } from "@/lib/api/client"
+import { useUser } from "@/lib/contexts/user-context"
 
 interface DashboardStats {
   job_bookmarks: number
@@ -24,6 +25,7 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const { userData } = useUser()
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -63,7 +65,7 @@ export default function DashboardPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-text-primary dark:text-[#e4e6eb]">Dashboard</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-text-primary dark:text-[#e4e6eb] mb-3">Dashboard</h1>
           <p className="text-text-secondary dark:text-[#b0b3b8]">
             Loading your dashboard...
           </p>
@@ -81,7 +83,7 @@ export default function DashboardPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-text-primary dark:text-[#e4e6eb]">Dashboard</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-text-primary dark:text-[#e4e6eb] mb-3">Dashboard</h1>
           <p className="text-red-500">Error: {error}</p>
         </div>
       </div>
@@ -91,7 +93,7 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-text-primary dark:text-[#e4e6eb]">
+        <h1 className="text-3xl font-bold tracking-tight text-text-primary dark:text-[#e4e6eb] mb-3">
           Dashboard
           {stats?._isMockData && (
             <span className="ml-2 text-xs bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200 px-2 py-1 rounded">
@@ -100,7 +102,12 @@ export default function DashboardPage() {
           )}
         </h1>
         <p className="text-text-secondary dark:text-[#b0b3b8]">
-          Welcome back! Here's an overview of your job search progress.
+          Welcome back, <strong>
+            {userData?.firstName && userData?.lastName
+              ? `${userData.firstName} ${userData.lastName}`
+              : userData?.firstName || userData?.email?.split('@')[0] || "User"
+            }
+          </strong>! Here is an overview of your job search journey.
           {stats?._isMockData && " (Currently showing demo data - check console for API errors)"}
         </p>
       </div>
