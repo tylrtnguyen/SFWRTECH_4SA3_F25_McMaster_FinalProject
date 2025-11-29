@@ -5,8 +5,8 @@ Implements different loggers that can be chained together
 
 import json
 from abc import ABC, abstractmethod
-from datetime import datetime
-from typing import Optional, Dict, Any, Union
+from datetime import datetime, timezone
+from typing import Optional, Dict, Any
 from app.core.singleton import DatabaseManager
 
 
@@ -20,7 +20,7 @@ class LogMessage:
         self.user_id = user_id
         self.action = action
         self.details = details or {}
-        self.timestamp = datetime.now(datetime.timezone.utc)
+        self.timestamp = datetime.now(timezone.utc)
 
 
 class Logger(ABC):

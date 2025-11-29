@@ -1,75 +1,106 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Search, Link as LinkIcon, FileText, Upload, Bookmark, Sparkles, Loader2, AlertCircle } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { JobForm, type JobFormData } from "@/components/job-form"
-import { searchJobByUrl, submitManualJob, uploadJobDocument, type JobUrlSearchResponse } from "@/lib/api/client"
-import { JobSearchResults } from "@/components/job-search-results"
+import { useState } from "react";
+import {
+  Search,
+  Link as LinkIcon,
+  FileText,
+  Upload,
+  Bookmark,
+  Sparkles,
+  Loader2,
+  AlertCircle,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { JobForm, type JobFormData } from "@/components/job-form";
+import {
+  searchJobByUrl,
+  submitManualJob,
+  uploadJobDocument,
+  type JobUrlSearchResponse,
+} from "@/lib/api/client";
+import { JobSearchResults } from "@/components/job-search-results";
 
 export function JobSearch() {
-  const [url, setUrl] = useState("")
-  const [file, setFile] = useState<File | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
-  const [loadingMessage, setLoadingMessage] = useState("")
-  const [error, setError] = useState<string | null>(null)
-  const [searchResult, setSearchResult] = useState<JobUrlSearchResponse | null>(null)
+  const [url, setUrl] = useState("");
+  const [file, setFile] = useState<File | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [searchResult, setSearchResult] = useState<JobUrlSearchResponse | null>(
+    null
+  );
 
   // URL validation regex patterns
-  const linkedinUrlPattern = /^https?:\/\/(www\.)?linkedin\.com\/jobs\/view\//
-  const indeedUrlPattern = /^https?:\/\/([a-z]{2}\.)?(www\.)?indeed\.com\/viewjob\?jk=/
+  const linkedinUrlPattern = /^https?:\/\/(www\.)?linkedin\.com\/jobs\/view\//;
+  const indeedUrlPattern =
+    /^https?:\/\/([a-z]{2}\.)?(www\.)?indeed\.com\/viewjob\?jk=/;
 
   const validateJobUrl = (url: string): boolean => {
-    if (!url.trim()) return false
-    const normalizedUrl = url.startsWith("http") ? url : `https://${url}`
-    return linkedinUrlPattern.test(normalizedUrl) || indeedUrlPattern.test(normalizedUrl)
-  }
+    if (!url.trim()) return false;
+    const normalizedUrl = url.startsWith("http") ? url : `https://${url}`;
+    return (
+      linkedinUrlPattern.test(normalizedUrl) ||
+      indeedUrlPattern.test(normalizedUrl)
+    );
+  };
 
   const handleUrlSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError(null)
-    setSearchResult(null)
-    
+    e.preventDefault();
+    setError(null);
+    setSearchResult(null);
+
     // Validate URL format
     if (!validateJobUrl(url)) {
-      setError("Please enter a valid LinkedIn or Indeed job URL (e.g., https://www.linkedin.com/jobs/view/... or https://ca.indeed.com/viewjob?jk=...)")
-      return
+      setError(
+        "Please enter a valid LinkedIn or Indeed job URL (e.g., https://www.linkedin.com/jobs/view/... or https://ca.indeed.com/viewjob?jk=...)"
+      );
+      return;
     }
-    
-    setIsLoading(true)
-    setLoadingMessage("Verifying URL safety...")
-    
+
+    setIsLoading(true);
+    setLoadingMessage("Verifying URL safety...");
+
     try {
       // Normalize URL
-      const normalizedUrl = url.startsWith("http") ? url : `https://${url}`
-      
-      setLoadingMessage("Scraping job data...")
-      const result = await searchJobByUrl(normalizedUrl)
-      
-      setLoadingMessage("Analyzing authenticity...")
+      const normalizedUrl = url.startsWith("http") ? url : `https://${url}`;
+
+      setLoadingMessage("Scraping job data...");
+      const result = await searchJobByUrl(normalizedUrl);
+
+      setLoadingMessage("Analyzing authenticity...");
       // Small delay to show the loading message
-      await new Promise((resolve) => setTimeout(resolve, 500))
-      
-      setSearchResult(result)
-      setUrl("") // Clear input on success
+      await new Promise((resolve) => setTimeout(resolve, 500));
+
+      setSearchResult(result);
+      setUrl(""); // Clear input on success
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Failed to search job. Please try again."
-      setError(errorMessage)
+      const errorMessage =
+        err instanceof Error
+          ? err.message
+          : "Failed to search job. Please try again.";
+      setError(errorMessage);
     } finally {
-      setIsLoading(false)
-      setLoadingMessage("")
+      setIsLoading(false);
+      setLoadingMessage("");
     }
-  }
+  };
 
   const handleManualSubmit = async (data: JobFormData) => {
-    setError(null)
-    setSearchResult(null)
+    setError(null);
+    setSearchResult(null);
 
-    setIsLoading(true)
-    setLoadingMessage("Analyzing job authenticity...")
+    setIsLoading(true);
+    setLoadingMessage("Analyzing job authenticity...");
 
     try {
       // Map JobFormData to API format
@@ -79,103 +110,113 @@ export function JobSearch() {
         location: data.location,
         industry: data.industry,
         source: data.source,
-        description: data.jobDescription
-      }
+        description: data.jobDescription,
+      };
 
-      const result = await submitManualJob(apiData)
+      const result = await submitManualJob(apiData);
 
-      setLoadingMessage("Processing results...")
+      setLoadingMessage("Processing results...");
       // Small delay to show the loading message
-      await new Promise((resolve) => setTimeout(resolve, 500))
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
-      setSearchResult(result)
+      setSearchResult(result);
       // Only clear form on successful analysis display
       // This will be handled by the form's reset function when results are shown
     } catch (err) {
-      let errorMessage = "Failed to submit job. Please try again."
+      let errorMessage = "Failed to submit job. Please try again.";
 
       // Provide more educational error messages
       if (err instanceof Error) {
         if (err.message.includes("Insufficient credits")) {
-          errorMessage = "You don't have enough credits to analyze this job. Please purchase more credits to continue."
+          errorMessage =
+            "You don't have enough credits to analyze this job. Please purchase more credits to continue.";
         } else if (err.message.includes("Invalid")) {
-          errorMessage = "There was an issue with your job details. Please check all required fields and try again."
-        } else if (err.message.includes("network") || err.message.includes("fetch")) {
-          errorMessage = "Network error occurred. Please check your connection and try again."
+          errorMessage =
+            "There was an issue with your job details. Please check all required fields and try again.";
+        } else if (
+          err.message.includes("network") ||
+          err.message.includes("fetch")
+        ) {
+          errorMessage =
+            "Network error occurred. Please check your connection and try again.";
         } else {
-          errorMessage = err.message
+          errorMessage = err.message;
         }
       }
 
-      setError(errorMessage)
+      setError(errorMessage);
       // Don't reset form on error - keep values so user can fix them
     } finally {
-      setIsLoading(false)
-      setLoadingMessage("")
+      setIsLoading(false);
+      setLoadingMessage("");
     }
-  }
+  };
 
   const validateFile = (file: File): string | null => {
-    const maxSize = 20 * 1024 * 1024 // 20MB
+    const maxSize = 20 * 1024 * 1024; // 20MB
     const allowedTypes = [
-      'application/pdf',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'application/msword',
-      'text/plain'
-    ]
+      "application/pdf",
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/msword",
+      "text/plain",
+    ];
 
     if (file.size > maxSize) {
-      return 'File size must be less than 20MB'
+      return "File size must be less than 20MB";
     }
 
     if (!allowedTypes.includes(file.type)) {
-      return 'Only PDF, DOC, DOCX, and TXT files are supported'
+      return "Only PDF, DOC, DOCX, and TXT files are supported";
     }
 
-    return null
-  }
+    return null;
+  };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files?.[0]
+    const selectedFile = e.target.files?.[0];
     if (selectedFile) {
-      const error = validateFile(selectedFile)
+      const error = validateFile(selectedFile);
       if (error) {
-        setError(error)
-        setFile(null)
+        setError(error);
+        setFile(null);
       } else {
-        setFile(selectedFile)
-        setError(null)
+        setFile(selectedFile);
+        setError(null);
       }
     }
-  }
+  };
 
   const processDocument = async () => {
-    if (!file) return
+    if (!file) return;
 
-    setIsLoading(true)
-    setLoadingMessage("Analyzing document...")
-    setError(null)
-    setSearchResult(null)
+    setIsLoading(true);
+    setLoadingMessage("Analyzing document...");
+    setError(null);
+    setSearchResult(null);
 
     try {
-      const result = await uploadJobDocument(file)
-      setSearchResult(result)
-      setFile(null) // Clear file after successful processing
-
+      const result = await uploadJobDocument(file);
+      setSearchResult(result);
+      setFile(null); // Clear file after successful processing
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Document processing failed')
+      setError(
+        err instanceof Error ? err.message : "Document processing failed"
+      );
     } finally {
-      setIsLoading(false)
-      setLoadingMessage("")
+      setIsLoading(false);
+      setLoadingMessage("");
     }
-  }
+  };
 
   return (
     <Card className="mb-6">
       <CardHeader>
-        <CardTitle className="text-text-primary dark:text-[#e4e6eb]">Search and Add Job</CardTitle>
+        <CardTitle className="text-text-primary dark:text-[#e4e6eb]">
+          Search and Add Job
+        </CardTitle>
         <CardDescription className="text-text-secondary dark:text-[#b0b3b8]">
-          Search for jobs by URL, manually input job details, or upload a job posting
+          Search for jobs by URL, manually input job details, or upload a job
+          posting. <b>Costs: 3 credits/analysis</b>
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -211,9 +252,9 @@ export function JobSearch() {
                 placeholder="Enter LinkedIn or Indeed job URL (e.g., https://www.linkedin.com/jobs/view/... or https://ca.indeed.com/viewjob?jk=...)"
                 value={url}
                 onChange={(e) => {
-                  setUrl(e.target.value)
-                  setError(null)
-                  setSearchResult(null)
+                  setUrl(e.target.value);
+                  setError(null);
+                  setSearchResult(null);
                 }}
                 disabled={isLoading}
                 className="flex-1 placeholder:text-text-secondary dark:placeholder:text-[#8993A4]"
@@ -287,24 +328,23 @@ export function JobSearch() {
                 </div>
               </div>
               {file && (
-                  <Button
-                    className="w-full bg-primary-600 dark:bg-primary-400 hover:bg-primary-700 dark:hover:bg-primary-500 text-white"
-                    onClick={processDocument}
-                    disabled={!file || isLoading}
-                  >
-                    {isLoading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Analyzing...
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="mr-2 h-4 w-4" />
-                        Process and bookmark
-                      </>
-                    )}
-                  </Button>
-                  
+                <Button
+                  className="w-full bg-primary-600 dark:bg-primary-400 hover:bg-primary-700 dark:hover:bg-primary-500 text-white"
+                  onClick={processDocument}
+                  disabled={!file || isLoading}
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Analyzing...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="mr-2 h-4 w-4" />
+                      Process and bookmark
+                    </>
+                  )}
+                </Button>
               )}
             </div>
           </TabsContent>
@@ -323,14 +363,13 @@ export function JobSearch() {
             <JobSearchResults
               result={searchResult}
               onAcknowledge={() => {
-                setSearchResult(null)
-                setError(null)
+                setSearchResult(null);
+                setError(null);
               }}
             />
           )}
         </div>
       </CardContent>
     </Card>
-  )
+  );
 }
-
