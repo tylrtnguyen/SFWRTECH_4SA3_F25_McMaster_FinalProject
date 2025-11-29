@@ -92,9 +92,9 @@ export function JobForm({ onSubmit, isSubmitting: externalIsSubmitting = false }
         // Refresh industries list
         const updatedIndustries = await getIndustries()
         setIndustries(updatedIndustries)
-        setValue("industry", customIndustry.trim(), { shouldValidate: true })
-        setCustomIndustry("")
-        setShowCustomIndustry(false)
+      setValue("industry", customIndustry.trim(), { shouldValidate: true })
+      setCustomIndustry("")
+      setShowCustomIndustry(false)
       } catch (error) {
         console.error("Failed to add custom industry:", error)
         // Still allow the user to select it even if API failed

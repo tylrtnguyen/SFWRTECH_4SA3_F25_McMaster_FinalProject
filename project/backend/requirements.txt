@@ -24,4 +24,6 @@ python-docx==1.1.0
 openpyxl==3.1.2
 pdfminer.six==20221105
 docx2txt==0.8
+# Google Cloud Storage
+google-cloud-storage==2.14.0
 

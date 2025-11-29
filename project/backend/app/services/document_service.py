@@ -7,7 +7,7 @@ import io
 import logging
 import tempfile
 import os
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, Tuple
 from pathlib import Path
 
 try:
@@ -15,6 +15,12 @@ try:
     PDF_AVAILABLE = True
 except ImportError:
     PDF_AVAILABLE = False
+
+try:
+    from pdfminer.high_level import extract_text as pdfminer_extract
+    PDFMINER_AVAILABLE = True
+except ImportError:
+    PDFMINER_AVAILABLE = False
 
 try:
     from docx import Document
@@ -93,34 +99,59 @@ class DocumentService:
 
     @staticmethod
     def _extract_pdf_text(content: bytes) -> Tuple[str, Dict[str, Any]]:
-        """Extract text from PDF files using PyPDF2"""
-        if not PDF_AVAILABLE:
-            raise Exception("PyPDF2 not available for PDF processing")
+        """Extract text from PDF files using PyPDF2, with pdfminer fallback"""
+        text = ""
+        extraction_method = "unknown"
+        pages = 0
+        readable_pages = 0
 
-        try:
-            pdf_reader = PyPDF2.PdfReader(io.BytesIO(content))
-            text = ""
+        # Try PyPDF2 first
+        if PDF_AVAILABLE:
+            try:
+                pdf_reader = PyPDF2.PdfReader(io.BytesIO(content))
+                text = ""
+                pages = len(pdf_reader.pages)
 
-            for page_num, page in enumerate(pdf_reader.pages):
-                try:
-                    page_text = page.extract_text()
-                    if page_text.strip():  # Only add non-empty pages
-                        text += page_text + "\n"
-                except Exception as e:
-                    logger.warning(f"Failed to extract text from PDF page {page_num + 1}: {str(e)}")
-                    continue
+                for page_num, page in enumerate(pdf_reader.pages):
+                    try:
+                        page_text = page.extract_text()
+                        if page_text.strip():  # Only add non-empty pages
+                            text += page_text + "\n"
+                            readable_pages += 1
+                    except Exception as e:
+                        logger.warning(f"Failed to extract text from PDF page {page_num + 1} with PyPDF2: {str(e)}")
+                        continue
 
-            if not text.strip():
-                raise Exception("No readable text found in PDF")
+                extraction_method = 'PyPDF2'
+                logger.info(f"PyPDF2 extracted {len(text.strip())} characters from {readable_pages}/{pages} pages")
+            except Exception as e:
+                logger.warning(f"PyPDF2 PDF extraction failed: {str(e)}")
 
-            return text.strip(), {
-                'pages': len(pdf_reader.pages),
-                'extraction_method': 'PyPDF2',
-                'readable_pages': sum(1 for page in pdf_reader.pages if page.extract_text().strip())
-            }
-        except Exception as e:
-            logger.error(f"PDF extraction failed: {str(e)}")
-            raise Exception(f"PDF processing failed: {str(e)}")
+        # If PyPDF2 failed or extracted insufficient text, try pdfminer
+        if (not text.strip() or len(text.strip()) < 100) and PDFMINER_AVAILABLE:
+            try:
+                logger.info("Attempting PDF extraction with pdfminer")
+                with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
+                    temp_file.write(content)
+                    temp_path = temp_file.name
+
+                text = pdfminer_extract(temp_path)
+                extraction_method = 'pdfminer'
+                logger.info(f"pdfminer extracted {len(text.strip())} characters")
+
+                # Clean up
+                os.unlink(temp_path)
+            except Exception as e:
+                logger.warning(f"pdfminer PDF extraction failed: {str(e)}")
+
+        if not text.strip():
+            raise Exception("No readable text found in PDF")
+
+        return text.strip(), {
+            'pages': pages,
+            'extraction_method': extraction_method,
+            'readable_pages': readable_pages if extraction_method == 'PyPDF2' else 'unknown'
+        }
 
     @staticmethod
     def _extract_docx_text(content: bytes, mime_type: str) -> Tuple[str, Dict[str, Any]]:

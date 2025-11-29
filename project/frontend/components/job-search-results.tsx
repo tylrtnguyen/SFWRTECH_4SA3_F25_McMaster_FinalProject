@@ -126,7 +126,7 @@ export function JobSearchResults({ result, onAcknowledge }: JobSearchResultsProp
                   strong: ({ children }) => <strong className="font-semibold text-text-primary dark:text-[#e4e6eb]">{children}</strong>,
                 }}
               >
-                {analysis.evidence}
+              {analysis.evidence}
               </ReactMarkdown>
             </div>
           </div>
@@ -155,25 +155,25 @@ export function JobSearchResults({ result, onAcknowledge }: JobSearchResultsProp
         {/* Actions */}
         <div className="flex gap-2 pt-2">
           {displaySourceUrl && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="flex-1"
-              onClick={() => {
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex-1"
+            onClick={() => {
                 window.open(displaySourceUrl, "_blank")
-              }}
-            >
-              View Original Posting
-            </Button>
+            }}
+          >
+            View Original Posting
+          </Button>
           )}
           {bookmarked ? (
-            <Button
-              variant="outline"
-              size="sm"
-              disabled
-              className="opacity-50 cursor-not-allowed"
-            >
-              <BookmarkIcon className="mr-2 h-4 w-4" />
+          <Button
+            variant="outline"
+            size="sm"
+            disabled
+            className="opacity-50 cursor-not-allowed"
+          >
+            <BookmarkIcon className="mr-2 h-4 w-4" />
               {already_bookmarked ? "Already Bookmarked" : "Bookmarked"}
             </Button>
           ) : (
@@ -195,7 +195,7 @@ export function JobSearchResults({ result, onAcknowledge }: JobSearchResultsProp
               className="bg-secondary-600 hover:bg-secondary-700 text-white"
             >
               Acknowledge
-            </Button>
+          </Button>
           )}
         </div>
       </CardContent>

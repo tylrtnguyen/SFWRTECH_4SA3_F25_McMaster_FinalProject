@@ -43,13 +43,13 @@ export async function getIndustries(): Promise<string[]> {
     console.error("Error fetching industries from API:", error)
     // Fallback to basic defaults if API fails
     return [
-      "Technology",
-      "Healthcare",
-      "Finance",
-      "Education",
-      "Manufacturing",
-      "Retail",
-      "Consulting",
+  "Technology",
+  "Healthcare",
+  "Finance",
+  "Education",
+  "Manufacturing",
+  "Retail",
+  "Consulting",
       "Other"
     ]
   }

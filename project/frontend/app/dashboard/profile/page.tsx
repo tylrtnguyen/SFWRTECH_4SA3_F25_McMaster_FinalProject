@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -9,12 +10,13 @@ import { Separator } from "@/components/ui/separator"
 import { useToast } from "@/hooks/use-toast"
 import { createClient } from "@/lib/supabase/client"
 import { useUser } from "@/lib/contexts/user-context"
-import { Eye, EyeOff, CreditCard, User, Mail } from "lucide-react"
+import { Eye, EyeOff, CreditCard, User, Mail, CheckCircle2, XCircle } from "lucide-react"
 
 export default function ProfilePage() {
   const { userData, refetchUserData } = useUser()
   const [updating, setUpdating] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [paymentStatus, setPaymentStatus] = useState<"success" | "cancelled" | null>(null)
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
@@ -26,6 +28,74 @@ export default function ProfilePage() {
 
   const { toast } = useToast()
   const supabase = createClient()
+  const searchParams = useSearchParams()
+
+  // Handle payment redirect status
+  useEffect(() => {
+    const payment = searchParams.get("payment")
+    const sessionId = searchParams.get("session_id")
+    
+    const verifyPayment = async (sid: string) => {
+      try {
+        const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+        const response = await fetch(`${API_BASE_URL}/api/v1/payments/verify-payment/${sid}`, {
+          method: "POST",
+        })
+        const data = await response.json()
+        
+        if (data.status === "success") {
+          setPaymentStatus("success")
+          toast({
+            title: "Payment Successful!",
+            description: `${data.credits_added} credits have been added to your account.`,
+          })
+          refetchUserData()
+        } else if (data.status === "unpaid" || data.status === "cancelled") {
+          setPaymentStatus("cancelled")
+          toast({
+            title: "Payment Not Completed",
+            description: data.message || "Your payment was not completed.",
+            variant: "destructive",
+          })
+        }
+      } catch (error) {
+        console.error("Payment verification failed:", error)
+        // Still show success message - webhook might have handled it
+        setPaymentStatus("success")
+        toast({
+          title: "Payment Processing",
+          description: "Your payment is being processed. Credits will be added shortly.",
+        })
+        refetchUserData()
+      }
+    }
+    
+    if (payment === "success") {
+      if (sessionId) {
+        // Verify the payment with the backend
+        verifyPayment(sessionId)
+      } else {
+        // No session ID, just show success and refetch
+        setPaymentStatus("success")
+        toast({
+          title: "Payment Successful!",
+          description: "Your credits have been added to your account.",
+        })
+        refetchUserData()
+      }
+      // Clear the URL parameter
+      window.history.replaceState({}, "", "/dashboard/profile")
+    } else if (payment === "cancelled") {
+      setPaymentStatus("cancelled")
+      toast({
+        title: "Payment Cancelled",
+        description: "Your payment was cancelled. No credits were added.",
+        variant: "destructive",
+      })
+      // Clear the URL parameter
+      window.history.replaceState({}, "", "/dashboard/profile")
+    }
+  }, [searchParams, toast, refetchUserData])
 
   // Initialize form data when userData is available
   useEffect(() => {
@@ -136,7 +206,16 @@ export default function ProfilePage() {
     if (!creditsToAdd || creditsToAdd <= 0) {
       toast({
         title: "Error",
-        description: "Please enter a valid number of credits",
+        description: "Please enter a valid number of credits (minimum 10)",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (creditsToAdd < 10) {
+      toast({
+        title: "Error",
+        description: "Minimum purchase is 10 credits ($1.00)",
         variant: "destructive",
       })
       return
@@ -149,36 +228,45 @@ export default function ProfilePage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error("User not found")
 
-      // Update credits in users table
-      const { error } = await supabase
-        .from("users")
-        .update({ credits: userData.credits + creditsToAdd })
-        .eq("user_id", user.id)
-
-      if (error) throw error
-
-      await refetchUserData()
-      setFormData(prev => ({ ...prev, creditsToAdd: "" }))
-
-      toast({
-        title: "Success",
-        description: `${creditsToAdd} credits added successfully`,
+      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
+      
+      // Create Stripe Checkout session
+      const response = await fetch(`${API_BASE_URL}/api/v1/payments/checkout-session`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: user.id,
+          credits: creditsToAdd,
+          // Include {CHECKOUT_SESSION_ID} placeholder - Stripe will replace it with the actual session ID
+          success_url: `${window.location.origin}/dashboard/profile?payment=success&session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url: `${window.location.origin}/dashboard/profile?payment=cancelled`
+        })
       })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.detail || "Failed to create checkout session")
+      }
+
+      const data = await response.json()
+      
+      // Redirect to Stripe Checkout
+      window.location.href = data.checkout_url
     } catch (error) {
-      console.error("Error adding credits:", error)
+      console.error("Error starting checkout:", error)
       toast({
         title: "Error",
-        description: "Failed to add credits",
+        description: error instanceof Error ? error.message : "Failed to start checkout",
         variant: "destructive",
       })
-    } finally {
       setUpdating(false)
     }
+    // Note: Don't set updating to false on success - we're redirecting
   }
 
   if (!userData || userData.isLoading) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-8 px-4 md:px-8 lg:px-16 xl:px-24 max-w-7xl mx-auto">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Profile</h1>
           <p className="text-muted-foreground">Loading profile data...</p>
@@ -189,7 +277,7 @@ export default function ProfilePage() {
 
   if (userData.error) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-8 px-4 md:px-8 lg:px-16 xl:px-24 max-w-7xl mx-auto">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Profile</h1>
           <p className="text-red-500">Error: {userData.error}</p>
@@ -199,7 +287,7 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 px-4 md:px-8 lg:px-16 xl:px-24 max-w-7xl mx-auto">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Profile</h1>
         <p className="text-muted-foreground">
@@ -249,6 +337,87 @@ export default function ProfilePage() {
               </div>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+        {/* Add Credits Form */}
+        <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <CreditCard className="h-5 w-5" />
+            Purchase Credits
+          </CardTitle>
+          <CardDescription>
+            Purchase additional credits for job analysis. Rate: $1 = 10 credits
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Payment Status Message */}
+          {paymentStatus === "success" && (
+            <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-md">
+              <CheckCircle2 className="h-5 w-5" />
+              <span>Payment successful! Your credits have been added.</span>
+            </div>
+          )}
+          {paymentStatus === "cancelled" && (
+            <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 rounded-md">
+              <XCircle className="h-5 w-5" />
+              <span>Payment was cancelled. No credits were added.</span>
+            </div>
+          )}
+          
+          <form onSubmit={handleAddCredits} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="credits">Credits to Purchase</Label>
+              <Input
+                id="credits"
+                type="number"
+                min="10"
+                step="10"
+                value={formData.creditsToAdd}
+                onChange={(e) => setFormData(prev => ({ ...prev, creditsToAdd: e.target.value }))}
+                placeholder="Enter number of credits (min. 10)"
+                required
+              />
+              {formData.creditsToAdd && parseInt(formData.creditsToAdd) >= 10 && (
+                <p className="text-sm text-muted-foreground">
+                  Cost: ${((parseInt(formData.creditsToAdd) / 10)).toFixed(2)} CAD
+                </p>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button 
+                type="button" 
+                variant="outline" 
+                size="sm"
+                onClick={() => setFormData(prev => ({ ...prev, creditsToAdd: "50" }))}
+              >
+                50 credits ($5)
+              </Button>
+              <Button 
+                type="button" 
+                variant="outline" 
+                size="sm"
+                onClick={() => setFormData(prev => ({ ...prev, creditsToAdd: "100" }))}
+              >
+                100 credits ($10)
+              </Button>
+              <Button 
+                type="button" 
+                variant="outline" 
+                size="sm"
+                onClick={() => setFormData(prev => ({ ...prev, creditsToAdd: "200" }))}
+              >
+                200 credits ($20)
+              </Button>
+            </div>
+            <Button type="submit" disabled={updating}>
+              {updating ? "Redirecting to Checkout..." : "Purchase with Stripe"}
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              You will be redirected to Stripe&apos;s secure checkout page
+            </p>
+          </form>
         </CardContent>
       </Card>
 
@@ -303,7 +472,7 @@ export default function ProfilePage() {
               {updating ? "Updating..." : "Update Profile"}
             </Button>
           </form>
-        </CardContent>
+        </CardContent>  
       </Card>
 
       {/* Change Password Form */}
@@ -360,37 +529,6 @@ export default function ProfilePage() {
         </CardContent>
       </Card>
 
-      {/* Add Credits Form */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <CreditCard className="h-5 w-5" />
-            Add Credits
-          </CardTitle>
-          <CardDescription>
-            Purchase additional credits for job analysis
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleAddCredits} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="credits">Credits to Add</Label>
-              <Input
-                id="credits"
-                type="number"
-                min="1"
-                value={formData.creditsToAdd}
-                onChange={(e) => setFormData(prev => ({ ...prev, creditsToAdd: e.target.value }))}
-                placeholder="Enter number of credits"
-                required
-              />
-            </div>
-            <Button type="submit" disabled={updating}>
-              {updating ? "Adding Credits..." : "Add Credits"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
     </div>
   )
 }

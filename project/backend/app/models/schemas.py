@@ -495,6 +495,20 @@ class PaymentWebhook(BaseModel):
     data: Dict[str, Any]
 
 
+class CheckoutSessionCreate(BaseModel):
+    """Create Stripe Checkout session"""
+    user_id: UUID = Field(..., description="User ID")
+    credits: int = Field(..., gt=0, description="Number of credits to purchase")
+    success_url: str = Field(..., description="URL to redirect after successful payment")
+    cancel_url: str = Field(..., description="URL to redirect if payment is cancelled")
+
+
+class CheckoutSessionResponse(BaseModel):
+    """Checkout session response"""
+    checkout_url: str
+    session_id: str
+
+
 class UserPreferences(BaseModel):
     """User preferences for job matching"""
     min_salary: Optional[int] = None
@@ -519,25 +533,43 @@ class ValidationErrorResponse(BaseModel):
 
 
 # Resume Models
+class ExperienceLevel(str, Enum):
+    """Experience level enum for resumes"""
+    JUNIOR = "junior"
+    MID_SENIOR = "mid_senior"
+    DIRECTOR = "director"
+    EXECUTIVE = "executive"
+
+
 class ResumeBase(BaseModel):
     """Base resume model"""
     filename: str = Field(..., max_length=255, description="Resume filename")
     size: int = Field(..., description="File size in bytes")
     object_id: str = Field(..., max_length=255, description="GCP Cloud Storage bucket file ID")
     user_id: UUID = Field(..., description="User who uploaded the resume")
-    last_match_job_bookmark_id: Optional[UUID] = Field(None, description="Last job bookmark this resume was matched against")
-    recommended_tips: Optional[str] = Field(None, description="AI-generated resume improvement tips")
+    resume_name: Optional[str] = Field(None, max_length=255, description="User-friendly name for the resume")
+    experience: Optional[ExperienceLevel] = Field(ExperienceLevel.JUNIOR, description="Experience level")
+    targeted_job_bookmark_id: Optional[UUID] = Field(None, description="Target job bookmark for resume optimization")
 
 
-class ResumeCreate(ResumeBase):
-    """Resume creation model"""
-    pass
+class ResumeCreate(BaseModel):
+    """Resume creation model - for API request"""
+    resume_name: str = Field(..., max_length=255, description="User-friendly name for the resume")
+    experience: ExperienceLevel = Field(ExperienceLevel.JUNIOR, description="Experience level")
+    targeted_job_bookmark_id: Optional[UUID] = Field(None, description="Target job bookmark for resume optimization")
+
+
+class ResumeUpdate(BaseModel):
+    """Resume update model - for editing resume metadata"""
+    resume_name: Optional[str] = Field(None, max_length=255, description="User-friendly name for the resume")
+    experience: Optional[ExperienceLevel] = Field(None, description="Experience level")
+    targeted_job_bookmark_id: Optional[UUID] = Field(None, description="Target job bookmark for resume optimization")
 
 
 class Resume(ResumeBase):
     """Resume model matching database schema"""
     id: UUID = Field(..., description="Unique resume identifier")
-    uploaded_date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Upload timestamp")
+    uploaded_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), description="Upload timestamp")
     
     class Config:
         from_attributes = True
@@ -548,11 +580,43 @@ class ResumeResponse(BaseModel):
     id: UUID
     filename: str
     size: int
-    uploaded_date: datetime
+    uploaded_at: datetime
     object_id: str
     user_id: UUID
-    last_match_job_bookmark_id: Optional[UUID]
-    recommended_tips: Optional[str]
+    resume_name: Optional[str] = None
+    experience: Optional[ExperienceLevel] = None
+    targeted_job_bookmark_id: Optional[UUID] = None
+    # Optional joined data
+    targeted_job_title: Optional[str] = None
+    targeted_job_company: Optional[str] = None
+    # Optional analysis data (joined from resume_analyses table)
+    match_score: Optional[float] = Field(None, description="Latest match score if resume has been analyzed")
+    recommended_tips: Optional[str] = Field(None, description="Latest recommended tips if resume has been analyzed")
+
+
+class ResumeAnalysisResponse(BaseModel):
+    """Response model for resume analysis"""
+    resume_id: UUID
+    match_score: float = Field(..., ge=0, le=100, description="Match score between resume and job")
+    recommended_tips: str = Field(..., description="AI-generated resume improvement tips in markdown format")
+    targeted_job_title: Optional[str] = None
+    targeted_job_company: Optional[str] = None
+    credits_used: int = Field(default=3, description="Credits consumed for analysis")
+    last_analyzed_at: Optional[str] = Field(None, description="Timestamp when analysis was performed")
+
+
+class ResumeAnalysis(BaseModel):
+    """Resume analysis record model"""
+    id: UUID = Field(..., description="Analysis record ID")
+    resume_id: UUID = Field(..., description="Resume that was analyzed")
+    match_score: Optional[float] = Field(None, ge=0, le=100, description="Match score if targeted job was analyzed")
+    targeted_job_bookmark_id: Optional[UUID] = Field(None, description="Targeted job bookmark used for analysis")
+    recommended_tips: str = Field(..., description="AI-generated tips in markdown format")
+    created_at: datetime = Field(..., description="When analysis was performed")
+
+    class Config:
+        from_attributes = True
+
 
 class DashboardStatsResponse(BaseModel):
     """Dashboard statistics response model"""

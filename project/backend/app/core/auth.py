@@ -119,14 +119,10 @@ def decode_supabase_token(token: str) -> Optional[dict]:
         # Also need to disable audience verification since Supabase tokens have aud="authenticated"
         try:
             unverified_payload = jwt.decode(
-            token,
+                token,
                 key="",  # Empty key since we're not verifying signature
-                options={
-                    "verify_signature": False,
-                    "verify_exp": False,
-                    "verify_aud": False  # Disable audience verification
-                }
-        )
+                options={"verify_signature": False, "verify_exp": False, "verify_aud": False}
+            )
             logger.debug("Successfully decoded Supabase token without verification")
         except JWTError as e:
             logger.error(f"Failed to decode Supabase token (malformed): {str(e)}")

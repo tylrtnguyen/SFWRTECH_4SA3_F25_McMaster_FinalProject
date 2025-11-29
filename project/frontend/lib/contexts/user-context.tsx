@@ -1,6 +1,6 @@
 "use client"
 
-import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react'
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef, ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
 interface UserData {
@@ -36,6 +36,7 @@ export function UserProvider({ children }: UserProviderProps) {
   const [userData, setUserData] = useState<UserData | null>({
     isLoading: true
   })
+  const hasInitialized = useRef(false)
 
   const supabase = createClient()
 
@@ -93,21 +94,27 @@ export function UserProvider({ children }: UserProviderProps) {
   }, [fetchUserData])
 
   useEffect(() => {
+    // Only initialize once
+    if (hasInitialized.current) return
+    hasInitialized.current = true
+
     fetchUserData()
 
     // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event: string, session: any) => {
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         await fetchUserData()
       } else if (event === 'SIGNED_OUT') {
         setUserData(null)
+        hasInitialized.current = false // Reset for re-initialization on next sign in
       }
     })
 
     return () => {
       subscription.unsubscribe()
     }
-  }, [fetchUserData, supabase])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []) // Intentionally empty - should only run once on mount
 
   const value: UserContextType = {
     userData,

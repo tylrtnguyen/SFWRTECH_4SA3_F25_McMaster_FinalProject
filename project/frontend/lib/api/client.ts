@@ -5,6 +5,13 @@
 
 import { createClient } from "@/lib/supabase/client"
 
+// Performance monitoring helper
+const logApiCall = (endpoint: string, startTime: number, success: boolean, error?: string) => {
+  const duration = performance.now() - startTime
+  const status = success ? 'SUCCESS' : 'FAILED'
+  console.log(`[API] ${endpoint} - ${status} (${duration.toFixed(2)}ms)`, error ? { error } : '')
+}
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000"
 
 export type ApplicationStatus = 
@@ -98,9 +105,14 @@ async function apiRequest<T>(
 ): Promise<T> {
   const token = await getAuthToken()
   
-  const headers: HeadersInit = {
+  const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    ...options.headers,
+  }
+  
+  // Merge existing headers if they exist
+  if (options.headers) {
+    const existingHeaders = options.headers as Record<string, string>
+    Object.assign(headers, existingHeaders)
   }
   
   if (token) {
@@ -164,20 +176,23 @@ export async function submitManualJob(jobData: {
  * Get dashboard statistics for the current user
  */
 export async function getDashboardStats(): Promise<DashboardStats> {
+  const startTime = performance.now()
+  const endpoint = '/api/v1/users/dashboard/stats'
 
-  const supabase = createClient()
-  const { data: { session } } = await supabase.auth.getSession()
+  try {
+    const supabase = createClient()
+    const { data: { session } } = await supabase.auth.getSession()
 
-  if (!session?.access_token) {
-    throw new Error("No authentication token found")
-  }
-
-  const response = await fetch(`${API_BASE_URL}/api/v1/users/dashboard/stats`, {
-    method: 'GET',
-    headers: {
-      'Authorization': `Bearer ${session.access_token}`
+    if (!session?.access_token) {
+      throw new Error("No authentication token found")
     }
-  })
+
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`
+      }
+    })
 
 
   if (!response.ok) {
@@ -199,21 +214,31 @@ export async function getDashboardStats(): Promise<DashboardStats> {
     throw new Error(errorMessage)
   }
 
-  return response.json()
+  const data = await response.json()
+  logApiCall(endpoint, startTime, true)
+  return data
+  } catch (error) {
+    logApiCall(endpoint, startTime, false, error instanceof Error ? error.message : 'Unknown error')
+    throw error
+  }
 }
 
 /**
  * Get user bookmarks with analysis data
  */
 export async function getBookmarks(): Promise<JobBookmarkData[]> {
-  const supabase = createClient()
-  const { data: { session } } = await supabase.auth.getSession()
+  const startTime = performance.now()
+  const endpoint = '/api/v1/jobs/bookmarks'
 
-  if (!session?.access_token) {
-    throw new Error("No authentication token found")
-  }
+  try {
+    const supabase = createClient()
+    const { data: { session } } = await supabase.auth.getSession()
 
-  const response = await fetch(`${API_BASE_URL}/api/v1/jobs/bookmarks`, {
+    if (!session?.access_token) {
+      throw new Error("No authentication token found")
+    }
+
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     method: 'GET',
     headers: {
       'Authorization': `Bearer ${session.access_token}`
@@ -239,7 +264,13 @@ export async function getBookmarks(): Promise<JobBookmarkData[]> {
     throw new Error(errorMessage)
   }
 
-  return response.json()
+  const data = await response.json()
+  logApiCall(endpoint, startTime, true)
+  return data
+  } catch (error) {
+    logApiCall(endpoint, startTime, false, error instanceof Error ? error.message : 'Unknown error')
+    throw error
+  }
 }
 
 /**
@@ -365,6 +396,306 @@ export async function uploadJobDocument(file: File): Promise<JobUrlSearchRespons
   }
 
   return response.json()
+}
+
+// ============================================================================
+// Resume Types and API Functions
+// ============================================================================
+
+export type ExperienceLevel = "junior" | "mid_senior" | "director" | "executive"
+
+export interface ResumeData {
+  id: string
+  filename: string
+  size: number
+  uploaded_at: string
+  object_id: string
+  user_id: string
+  resume_name: string | null
+  experience: ExperienceLevel | null
+  targeted_job_bookmark_id: string | null
+  match_score: number | null
+  recommended_tips: string | null
+  targeted_job_title: string | null
+  targeted_job_company: string | null
+}
+
+export interface ResumeCreateData {
+  resume_name: string
+  experience: ExperienceLevel
+  targeted_job_bookmark_id?: string | null
+}
+
+export interface ResumeUpdateData {
+  resume_name?: string
+  experience?: ExperienceLevel
+  targeted_job_bookmark_id?: string | null
+}
+
+export interface ResumeAnalysisResult {
+  resume_id: string
+  match_score: number | null
+  recommended_tips: string
+  targeted_job_title: string | null
+  targeted_job_company: string | null
+  credits_used: number
+  last_analyzed_at: string | null
+}
+
+/**
+ * Get all resumes for the current user
+ */
+export async function getResumes(): Promise<ResumeData[]> {
+  const supabase = createClient()
+  const { data: { session } } = await supabase.auth.getSession()
+
+  if (!session?.access_token) {
+    throw new Error("No authentication token found")
+  }
+
+  const response = await fetch(`${API_BASE_URL}/api/v1/resumes/`, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${session.access_token}`
+    }
+  })
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }))
+    throw new Error(errorData.detail || 'Failed to fetch resumes')
+  }
+
+  return response.json()
+}
+
+/**
+ * Get a specific resume by ID
+ */
+export async function getResume(resumeId: string): Promise<ResumeData> {
+  const supabase = createClient()
+  const { data: { session } } = await supabase.auth.getSession()
+
+  if (!session?.access_token) {
+    throw new Error("No authentication token found")
+  }
+
+  const response = await fetch(`${API_BASE_URL}/api/v1/resumes/${resumeId}`, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${session.access_token}`
+    }
+  })
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }))
+    throw new Error(errorData.detail || 'Failed to fetch resume')
+  }
+
+  return response.json()
+}
+
+/**
+ * Create a new resume (upload file with metadata)
+ */
+export async function createResume(
+  file: File,
+  metadata: ResumeCreateData
+): Promise<ResumeData> {
+  const supabase = createClient()
+  const { data: { session } } = await supabase.auth.getSession()
+
+  if (!session?.access_token) {
+    throw new Error("No authentication token found")
+  }
+
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('resume_name', metadata.resume_name)
+  formData.append('experience', metadata.experience)
+  if (metadata.targeted_job_bookmark_id) {
+    formData.append('targeted_job_bookmark_id', metadata.targeted_job_bookmark_id)
+  }
+
+  const response = await fetch(`${API_BASE_URL}/api/v1/resumes/`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${session.access_token}`
+    },
+    body: formData
+  })
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }))
+    throw new Error(errorData.detail || 'Failed to create resume')
+  }
+
+  return response.json()
+}
+
+/**
+ * Update resume metadata
+ */
+export async function updateResume(
+  resumeId: string,
+  updates: ResumeUpdateData
+): Promise<ResumeData> {
+  const supabase = createClient()
+  const { data: { session } } = await supabase.auth.getSession()
+
+  if (!session?.access_token) {
+    throw new Error("No authentication token found")
+  }
+
+  const response = await fetch(`${API_BASE_URL}/api/v1/resumes/${resumeId}`, {
+    method: 'PUT',
+    headers: {
+      'Authorization': `Bearer ${session.access_token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(updates)
+  })
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }))
+    throw new Error(errorData.detail || 'Failed to update resume')
+  }
+
+  return response.json()
+}
+
+/**
+ * Delete a resume
+ */
+export async function deleteResume(resumeId: string): Promise<void> {
+  const supabase = createClient()
+  const { data: { session } } = await supabase.auth.getSession()
+
+  if (!session?.access_token) {
+    throw new Error("No authentication token found")
+  }
+
+  const response = await fetch(`${API_BASE_URL}/api/v1/resumes/${resumeId}`, {
+    method: 'DELETE',
+    headers: {
+      'Authorization': `Bearer ${session.access_token}`
+    }
+  })
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }))
+    throw new Error(errorData.detail || 'Failed to delete resume')
+  }
+}
+
+/**
+ * Duplicate a resume
+ */
+export async function duplicateResume(resumeId: string): Promise<ResumeData> {
+  const supabase = createClient()
+  const { data: { session } } = await supabase.auth.getSession()
+
+  if (!session?.access_token) {
+    throw new Error("No authentication token found")
+  }
+
+  const response = await fetch(`${API_BASE_URL}/api/v1/resumes/${resumeId}/duplicate`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${session.access_token}`
+    }
+  })
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }))
+    throw new Error(errorData.detail || 'Failed to duplicate resume')
+  }
+
+  return response.json()
+}
+
+/**
+ * Analyze resume with Gemini AI
+ */
+export async function analyzeResume(resumeId: string, force: boolean = false): Promise<ResumeAnalysisResult> {
+  const supabase = createClient()
+  const { data: { session } } = await supabase.auth.getSession()
+
+  if (!session?.access_token) {
+    throw new Error("No authentication token found")
+  }
+
+  const url = new URL(`${API_BASE_URL}/api/v1/resumes/${resumeId}/analyze`)
+  if (force) {
+    url.searchParams.set('force', 'true')
+  }
+
+  const response = await fetch(url.toString(), {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${session.access_token}`
+    }
+  })
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }))
+    throw new Error(errorData.detail || 'Failed to analyze resume')
+  }
+
+  return response.json()
+}
+
+/**
+ * Get signed URL for resume preview
+ */
+export async function getResumePreviewUrl(resumeId: string): Promise<string> {
+  const supabase = createClient()
+  const { data: { session } } = await supabase.auth.getSession()
+
+  if (!session?.access_token) {
+    throw new Error("No authentication token found")
+  }
+
+  const response = await fetch(`${API_BASE_URL}/api/v1/resumes/${resumeId}/preview-url`, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${session.access_token}`
+    }
+  })
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }))
+    throw new Error(errorData.detail || 'Failed to get preview URL')
+  }
+
+  const data = await response.json()
+  return data.preview_url
+}
+
+/**
+ * Get signed URL for resume download
+ */
+export async function getResumeDownloadUrl(resumeId: string): Promise<string> {
+  const supabase = createClient()
+  const { data: { session } } = await supabase.auth.getSession()
+
+  if (!session?.access_token) {
+    throw new Error("No authentication token found")
+  }
+
+  const response = await fetch(`${API_BASE_URL}/api/v1/resumes/${resumeId}/download-url`, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${session.access_token}`
+    }
+  })
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: 'Unknown error' }))
+    throw new Error(errorData.detail || 'Failed to get download URL')
+  }
+
+  const data = await response.json()
+  return data.download_url
 }
 
 

@@ -116,6 +116,92 @@ class StripeService:
         except Exception as e:
             raise ValueError(f"Webhook verification failed: {str(e)}")
     
+    def create_checkout_session(
+        self,
+        user_id: str,
+        credits: int,
+        success_url: str,
+        cancel_url: str,
+        currency: str = "cad"
+    ) -> Dict[str, Any]:
+        """
+        Create a Stripe Checkout session
+        
+        Args:
+            user_id: User ID for metadata
+            credits: Number of credits to purchase
+            success_url: URL to redirect after successful payment
+            cancel_url: URL to redirect if payment is cancelled
+            currency: Currency code
+            
+        Returns:
+            Checkout session object with url and id
+        """
+        stripe = self.stripe_manager.get_client()
+        
+        # Calculate price: $1 = 10 credits, so credits/10 dollars in cents
+        amount_cents = (credits // 10) * 100
+        if amount_cents < 50:  # Stripe minimum is $0.50
+            amount_cents = 50
+        
+        try:
+            session = stripe.checkout.Session.create(
+                payment_method_types=["card"],
+                line_items=[{
+                    "price_data": {
+                        "currency": currency,
+                        "product_data": {
+                            "name": f"{credits} Credits",
+                            "description": f"Purchase {credits} credits for job analysis"
+                        },
+                        "unit_amount": amount_cents,
+                    },
+                    "quantity": 1,
+                }],
+                mode="payment",
+                success_url=success_url,
+                cancel_url=cancel_url,
+                metadata={
+                    "user_id": user_id,
+                    "credits": str(credits)
+                }
+            )
+            
+            return {
+                "id": session.id,
+                "url": session.url,
+                "amount": amount_cents,
+                "credits": credits
+            }
+        except Exception as e:
+            raise ValueError(f"Failed to create checkout session: {str(e)}")
+    
+    def retrieve_checkout_session(self, session_id: str) -> Dict[str, Any]:
+        """
+        Retrieve a Stripe Checkout session by ID
+        
+        Args:
+            session_id: Stripe Checkout session ID
+            
+        Returns:
+            Checkout session object with payment status and metadata
+        """
+        stripe = self.stripe_manager.get_client()
+        
+        try:
+            session = stripe.checkout.Session.retrieve(session_id)
+            
+            return {
+                "id": session.id,
+                "payment_status": session.payment_status,
+                "status": session.status,
+                "metadata": dict(session.metadata) if session.metadata else {},
+                "amount_total": session.amount_total,
+                "currency": session.currency
+            }
+        except Exception as e:
+            raise ValueError(f"Failed to retrieve checkout session: {str(e)}")
+    
     def calculate_credits_from_amount(self, amount_cents: int) -> int:
         """
         Calculate credits based on payment amount

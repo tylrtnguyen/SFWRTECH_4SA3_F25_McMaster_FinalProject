@@ -12,6 +12,7 @@ import {
   LayoutDashboard,
   ChevronLeft,
   ChevronRight,
+  Plus,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -19,7 +20,6 @@ import { Button } from "@/components/ui/button"
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
   { name: "Bookmarks", href: "/dashboard/bookmarks", icon: Bookmark },
-  { name: "Match Score", href: "/dashboard/match", icon: Calculator },
   { name: "Resume Tips", href: "/dashboard/resume", icon: FileCheck },
   { name: "Profile", href: "/dashboard/profile", icon: User },
 ]
@@ -54,6 +54,22 @@ export function Sidebar() {
           )}
         </Button>
       </div>
+
+      {/* Create New Resume Button */}
+      <div className="px-3 py-4">
+        <Button
+          className={cn(
+            "w-full bg-gradient-to-r from-purple-600 via-pink-600 to-blue-600 hover:from-purple-700 hover:via-pink-700 hover:to-blue-700 text-white border-2 border-purple-400/50 hover:border-purple-300/70 shadow-lg hover:shadow-purple-500/25 hover:shadow-2xl",
+            isCollapsed ? "px-2" : "justify-start gap-2"
+          )}
+        >
+          <Link href="/dashboard/resume?upload=true" className="flex items-center gap-2 w-full">
+            <Plus className={cn(isCollapsed ? "h-5 w-5" : "h-4 w-4")} />
+            {!isCollapsed && <span>Create New Resume</span>}
+          </Link>
+        </Button>
+      </div>
+
       <nav className="flex-1 space-y-1 px-3 py-4">
         {navigation.map((item) => {
           const isActive = pathname === item.href

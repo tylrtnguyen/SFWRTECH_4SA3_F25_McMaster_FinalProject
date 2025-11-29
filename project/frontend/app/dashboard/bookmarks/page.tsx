@@ -98,9 +98,16 @@ export default function BookmarksPage() {
   const [analysisExpanded, setAnalysisExpanded] = useState(false)
 
   // Reusable header component
-  const PageHeader = () => (
+  const PageHeader = (bookmarksLength: number | undefined) => (
     <div>
-      <h1 className="text-3xl font-bold tracking-tight text-text-primary dark:text-[#e4e6eb]">Bookmarks</h1>
+      <div className="space-y-3">
+        <h1 className="text-3xl font-bold tracking-tight text-text-primary dark:text-[#e4e6eb]">
+        Bookmarks
+        </h1>
+        <p className="text-text-secondary dark:text-[#b0b3b8]">
+        {bookmarksLength !== undefined ? `You have ${bookmarksLength} saved job${bookmarksLength !== 1 ? 's' : ''} in your bookmarks.` : ''}
+        </p>
+      </div>
     </div>
   )
 
@@ -279,8 +286,8 @@ export default function BookmarksPage() {
 
   if (!mounted || loading) {
     return (
-      <div className="space-y-6">
-        <PageHeader />
+      <div className="space-y-8 px-4 md:px-8 lg:px-16 xl:px-24 max-w-7xl mx-auto">
+        {PageHeader(bookmarks.length)}
         <div className="h-32 bg-gray-200 dark:bg-gray-800 rounded-lg animate-pulse"></div>
         <div className="h-96 bg-gray-200 dark:bg-gray-800 rounded-lg animate-pulse"></div>
       </div>
@@ -289,8 +296,8 @@ export default function BookmarksPage() {
 
   if (error) {
     return (
-      <div className="space-y-6">
-        <PageHeader />
+      <div className="space-y-8 px-4 md:px-8 lg:px-16 xl:px-24 max-w-7xl mx-auto">
+        {PageHeader(bookmarks.length)}
         <div className="text-center py-12">
           <p className="text-red-500 mb-4">Error: {error}</p>
           <Button onClick={() => window.location.reload()}>
@@ -302,17 +309,13 @@ export default function BookmarksPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <PageHeader />
+    <div className="space-y-8 px-4 md:px-8 lg:px-12 xl:px-16 max-w-7xl mx-auto">
+      {PageHeader(bookmarks.length)}
 
       {/* Info Card */}
       <Card className="bg-white dark:bg-[#22262e] border-none"><CardHeader>
           <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>Job Bookmarks Overview</CardTitle>
-              <CardDescription>
-                You have {bookmarks.length} saved job{bookmarks.length !== 1 ? 's' : ''} in your bookmarks
-              </CardDescription>
+      <div>
             </div>
             <Button onClick={exportToCSV} variant="outline" className="gap-2">
               <Download className="h-4 w-4" />
@@ -321,7 +324,6 @@ export default function BookmarksPage() {
           </div>
       </CardHeader></Card>
       
-
       {/* Bookmarks Table */}
       <Card>
         <CardHeader>
@@ -335,8 +337,8 @@ export default function BookmarksPage() {
             <div className="text-center py-12">
               <p className="text-text-secondary dark:text-[#b0b3b8] mb-4">
                 No bookmarks found. Start by analyzing some jobs!
-              </p>
-            </div>
+        </p>
+      </div>
           ) : (
             <Table>
               <TableHeader>
@@ -407,11 +409,18 @@ export default function BookmarksPage() {
                     </TableCell>
                     <TableCell>
                       <Badge
-                        variant={
-                          bookmark.application_status === 'interested' ? 'default' :
-                          bookmark.application_status === 'applied' ? 'secondary' :
-                          bookmark.application_status === 'interviewing' ? 'outline' :
-                          'destructive'
+                        className={
+                          bookmark.application_status === 'interested'
+                            ? 'bg-blue-500 hover:bg-blue-600 text-white'
+                            : bookmark.application_status === 'applied'
+                            ? 'bg-purple-500 hover:bg-purple-600 text-white'
+                            : bookmark.application_status === 'interviewing'
+                            ? 'bg-white hover:bg-gray-50 text-black border-gray-300'
+                            : bookmark.application_status === 'interviewed_passed'
+                            ? 'bg-green-500 hover:bg-green-600 text-white'
+                            : bookmark.application_status === 'interviewed_failed'
+                            ? 'bg-red-500 hover:bg-red-600 text-white'
+                            : 'bg-gray-500 hover:bg-gray-600 text-white'
                         }
                       >
                         {bookmark.application_status

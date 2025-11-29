@@ -53,6 +53,11 @@ class Settings(BaseSettings):
     # Application
     DEBUG: bool = False
     
+    # Google Cloud Storage
+    GOOGLE_GCS_BUCKET_NAME: str = ""
+    GOOGLE_PROJECT_ID: str = ""   # Alternative to GCS_PROJECT_ID   
+    GOOGLE_APPLICATION_CREDENTIALS: str = ""
+
     # Credit Packages Configuration
     # Package definitions: 100 credits ($9.99), 500 credits ($39.99), 1000 credits ($69.99)
     CREDIT_PACKAGES: dict = {

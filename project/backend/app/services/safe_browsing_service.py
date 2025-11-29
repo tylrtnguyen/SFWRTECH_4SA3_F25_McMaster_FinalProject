@@ -3,11 +3,10 @@ Google Safe Browsing API Service
 URL safety verification using Google Safe Browsing Lookup API v4
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any 
 from fastapi import HTTPException
 from app.core.singleton import APIConnectionManager
 from app.core.config import settings
-import json
 
 
 class SafeBrowsingService:

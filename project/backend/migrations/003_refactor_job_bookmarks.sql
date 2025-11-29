@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS resumes (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     filename VARCHAR(255) NOT NULL,
     size INTEGER NOT NULL,
-    uploaded_date TIMESTAMP DEFAULT NOW(),
+    uploaded_at TIMESTAMP DEFAULT NOW(),
     object_id VARCHAR(255) NOT NULL,
     user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
     last_match_job_bookmark_id UUID REFERENCES job_bookmarks(bookmark_id) ON DELETE SET NULL,

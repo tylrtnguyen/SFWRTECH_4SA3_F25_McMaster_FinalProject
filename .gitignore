@@ -5,3 +5,8 @@ __pycache__/
 node_modules/
 venv/
 .env
+secret.*
+
+*.log
+
+project/job_document_upload_test_cases/*.json

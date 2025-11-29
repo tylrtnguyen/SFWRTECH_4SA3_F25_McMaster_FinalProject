@@ -4,7 +4,7 @@ Modular job analysis pipelines for running detection, scoring, suggestions in or
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional, Dict, Any
+from typing import Optional
 from app.models.schemas import JobAnalysisRequestInternal, JobAnalysisResult
 
 

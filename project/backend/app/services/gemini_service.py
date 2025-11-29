@@ -42,7 +42,7 @@ class GeminiService:
             models_to_try.append(model_name)
         
         # Add common model names (with and without 'models/' prefix)
-        common_models = ['gemini-2.5-flash', 'gemini-2.5-pro']
+        common_models = ['gemini-2.5-pro', 'gemini-2.5-flash']
         for common_model in common_models:
             if common_model not in models_to_try:
                 models_to_try.append(common_model)

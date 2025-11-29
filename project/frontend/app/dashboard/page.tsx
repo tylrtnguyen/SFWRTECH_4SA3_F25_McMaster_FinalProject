@@ -63,7 +63,7 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-8 px-4 md:px-8 lg:px-12 xl:px-16 max-w-7xl mx-auto">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-text-primary dark:text-[#e4e6eb] mb-3">Dashboard</h1>
           <p className="text-text-secondary dark:text-[#b0b3b8]">
@@ -81,7 +81,7 @@ export default function DashboardPage() {
 
   if (error && !stats) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-8 px-4 md:px-8 lg:px-16 xl:px-24 max-w-7xl mx-auto">
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-text-primary dark:text-[#e4e6eb] mb-3">Dashboard</h1>
           <p className="text-red-500">Error: {error}</p>
@@ -91,7 +91,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 px-4 md:px-8 lg:px-16 xl:px-24 max-w-7xl mx-auto">
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-text-primary dark:text-[#e4e6eb] mb-3">
           Dashboard
@@ -155,7 +155,13 @@ export default function DashboardPage() {
             isPositive: stats!.avg_match_score_change >= 0,
             isPercentage: true
           } : undefined}
-          className="bg-success/10 dark:bg-success/20 border-success/30"
+          className={
+            stats!.avg_match_score && stats!.avg_match_score >= 84
+              ? "bg-green-50 dark:bg-green-900/20 border-green-300 dark:border-green-700"
+              : stats!.avg_match_score && stats!.avg_match_score >= 65
+              ? "bg-yellow-50 dark:bg-yellow-900/20 border-yellow-300 dark:border-yellow-700"
+              : "bg-gray-50 dark:bg-gray-900/20 border-gray-300 dark:border-gray-700"
+          }
         />
         <StatCard
           title="Credits Remaining"

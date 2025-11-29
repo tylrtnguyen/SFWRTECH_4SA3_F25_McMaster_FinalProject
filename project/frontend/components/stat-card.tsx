@@ -38,7 +38,7 @@ export function StatCard({
           <p
             className={cn(
               "text-sm font-medium mt-2 px-2 py-1 rounded-md inline-flex items-center gap-1",
-              trend.isPositive
+              trend.isPositive 
                 ? "text-green-700 bg-green-100 dark:text-green-300 dark:bg-green-900/30"
                 : "text-red-700 bg-red-100 dark:text-red-300 dark:bg-red-900/30"
             )}

@@ -48,6 +48,7 @@ async def get_current_user_id(
     logger.debug(f"Token received (length: {len(token)}, preview: {token[:50]}...)")
     
     # Try Supabase token first (since frontend uses Supabase auth)
+    supabase_payload = None
     try:
         supabase_payload = decode_supabase_token(token)
         logger.debug(f"Supabase payload: {supabase_payload}")

@@ -465,8 +465,17 @@ async def get_dashboard_stats(current_user_id: UUID = Depends(get_current_user_i
         job_bookmarks_change = calculate_percentage_change(current_week_bookmarks, prev_week_bookmarks)
         in_interview_change = calculate_percentage_change(current_week_interview, prev_week_interview)
 
-        # For now, set avg_match_score and its change to None (will be implemented later)
+        # Get avg match score from resume_analyses
+        resumes_response = supabase.table("resumes").select("id").eq("user_id", str(current_user_id)).execute()
+        resume_ids = [r["id"] for r in (resumes_response.data or [])]
+
         avg_match_score = None
+        if resume_ids:
+            analyses_response = supabase.table("resume_analyses").select("match_score").in_("resume_id", resume_ids).execute()
+            scores = [a["match_score"] for a in (analyses_response.data or []) if a.get("match_score") is not None]
+            if scores:
+                avg_match_score = round(sum(scores) / len(scores), 1)
+
         avg_match_score_change = None
         potential_jobs_change = None  # This would need more complex logic to track changes
 
